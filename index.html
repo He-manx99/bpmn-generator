@@ -196,7 +196,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); font
       <div class="section-label">leggibilità</div>
       <label class="rule-item"><input type="checkbox" class="rule-toggle" id="r4" checked><div><div class="rule-tag">NAMING TASK</div><div class="rule-text">I task usano la forma "Verbo + Oggetto" (es. "Verifica documento", "Approva richiesta").</div></div></label>
       <label class="rule-item"><input type="checkbox" class="rule-toggle" id="r5" checked><div><div class="rule-tag">FLUSSO</div><div class="rule-text">Il flusso principale si sviluppa da sinistra a destra.</div></div></label>
-      <label class="rule-item"><input type="checkbox" class="rule-toggle" id="r6"><div><div class="rule-tag">SWIM LANE</div><div class="rule-text">Se ci sono più attori coinvolti, usare swim lane separate per ognuno.</div></div></label>
+      <label class="rule-item" title="Non consigliato: le swim lane aumentano il rischio di XML malformato. Aggiungile manualmente in Bizagi." style="opacity:0.5;cursor:not-allowed;"><input type="checkbox" class="rule-toggle" id="r6" disabled><div><div class="rule-tag">SWIM LANE <span style="font-size:9px;color:var(--amber);">⚠ aggiungi in Bizagi</span></div><div class="rule-text">Se ci sono più attori coinvolti, usare swim lane separate per ognuno.</div></div></label>
       <div class="section-label">qualità</div>
       <label class="rule-item"><input type="checkbox" class="rule-toggle" id="r7" checked><div><div class="rule-tag">END EVENT</div><div class="rule-text">Ogni end event descrive l'esito del processo (es. "Approvato", "Rifiutato", "Completato").</div></div></label>
       <label class="rule-item"><input type="checkbox" class="rule-toggle" id="r8"><div><div class="rule-tag">ERROR EVENTS</div><div class="rule-text">Aggiungere boundary error event sui task critici che possono fallire.</div></div></label>
@@ -238,7 +238,7 @@ const RULES = {
   r3: 'Ogni exclusiveGateway deve avere almeno due uscite, ciascuna con condizione esplicita nella label del sequenceFlow.',
   r4: 'I nomi dei task devono usare la forma "Verbo + Oggetto" (es. "Verifica documento", "Approva richiesta", "Invia notifica").',
   r5: 'Il flusso principale si sviluppa da sinistra a destra: gli elementi devono avere coordinate x crescenti.',
-  r6: 'Se ci sono più attori o reparti coinvolti, utilizzare swim lane (lane) separate per ciascuno all\'interno di un pool.',
+  r6: '',  // swim lane disabilitata: aggiungere manualmente in Bizagi
   r7: 'Ogni endEvent deve avere un nome che descriva l\'esito specifico del processo (es. "Approvato", "Rifiutato", "Ordine emesso").',
   r8: 'Aggiungere boundaryEvent di tipo error sui task critici che potrebbero fallire, con un percorso di gestione errore.',
   r9: 'Aggiungere timerBoundaryEvent sui task di approvazione umana (userTask) per gestire i casi di timeout/scadenza.'
@@ -249,7 +249,6 @@ window.addEventListener('load', () => {
   initModeler();
   checkApiKey();
   renderHistory();
-  loadExample();
 });
 
 function initModeler() {
@@ -338,6 +337,7 @@ REGOLE XML CRITICHE:
 - Waypoint: usa centro-destra di source e centro-sinistra di target
 - Non usare caratteri speciali XML nei name: no &, no <, no >, no "
 - Chiudi SEMPRE </definitions> come ultimo tag
+- NON usare pool, lane, laneSet, participant: genera SEMPRE un processo flat senza swim lane
 
 ESEMPIO MINIMO (rispetta ESATTAMENTE questa struttura):
 <?xml version="1.0" encoding="UTF-8"?>
@@ -373,9 +373,11 @@ NAMING: prefissa il name di ogni elemento con il suo codice progressivo. Task: T
 
   try {
     const data = await callApi(key, systemPrompt,
-      `Genera il BPMN 2.0 XML completo per questo processo:\n${prompt}`, 8000);
+      `Genera il BPMN 2.0 XML completo per questo processo:\n${prompt}`, 16000);
 
     if (data.error) throw new Error(data.error.message);
+    if (data.stop_reason === 'max_tokens')
+      throw new Error('Processo troppo complesso: XML troncato. Semplifica la descrizione o riduci il numero di task.');
     updateTokens(data.usage);
 
     let xml = data.content[0].text.trim();
