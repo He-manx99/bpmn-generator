@@ -1,1 +1,661 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BPMN Generator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/bpmn-js@17.11.1/dist/assets/bpmn-js.css">
+<link rel="stylesheet" href="https://unpkg.com/bpmn-js@17.11.1/dist/assets/diagram-js.css">
+<link rel="stylesheet" href="https://unpkg.com/bpmn-js@17.11.1/dist/assets/bpmn-font/css/bpmn.css">
+<style>
+:root {
+  --bg: #0e0e0f;
+  --bg2: #161618;
+  --bg3: #1e1e21;
+  --border: #2a2a2e;
+  --border2: #3a3a40;
+  --text: #e8e8ea;
+  --text2: #8888a0;
+  --text3: #555568;
+  --accent: #6ee7b7;
+  --accent2: #34d399;
+  --accent-dim: #1a3d30;
+  --red: #f87171;
+  --red-dim: #3d1a1a;
+  --amber: #fbbf24;
+  --font: 'IBM Plex Sans', sans-serif;
+  --mono: 'IBM Plex Mono', monospace;
+  --radius: 6px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
 
+/* HEADER */
+#header { display: flex; align-items: center; justify-content: space-between; padding: 0 16px; height: 44px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+#header-left { display: flex; align-items: center; gap: 12px; }
+#logo { font-family: var(--mono); font-size: 13px; color: var(--accent); letter-spacing: 0.05em; }
+#logo span { color: var(--text3); }
+#header-right { display: flex; align-items: center; gap: 8px; }
+.hbtn { background: none; border: 1px solid var(--border); color: var(--text2); font-family: var(--font); font-size: 12px; padding: 4px 10px; border-radius: var(--radius); cursor: pointer; transition: all 0.15s; }
+.hbtn:hover { border-color: var(--border2); color: var(--text); }
+.hbtn.active { border-color: var(--accent-dim); color: var(--accent); background: var(--accent-dim); }
+#api-status { width: 6px; height: 6px; border-radius: 50%; background: var(--text3); flex-shrink: 0; }
+#api-status.ok { background: var(--accent2); box-shadow: 0 0 6px var(--accent2); }
+#api-status.err { background: var(--red); }
+#token-counter { font-family: var(--mono); font-size: 11px; color: var(--text3); display: flex; gap: 8px; align-items: center; padding: 4px 10px; border: 1px solid var(--border); border-radius: var(--radius); }
+#token-counter .tk-label { color: var(--text3); }
+#token-counter .tk-in { color: var(--text2); }
+#token-counter .tk-out { color: var(--accent); }
+#token-counter .tk-sep { color: var(--border2); }
+#token-counter .tk-total { color: var(--amber); }
+
+/* LAYOUT */
+#main { display: flex; flex: 1; overflow: hidden; }
+
+/* SIDEBAR */
+#sidebar { width: 280px; border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; }
+#sidebar-tabs { display: flex; border-bottom: 1px solid var(--border); }
+.stab { flex: 1; padding: 10px 0; text-align: center; font-size: 11px; font-family: var(--mono); color: var(--text3); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; letter-spacing: 0.05em; }
+.stab:hover { color: var(--text2); }
+.stab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.stab-panel { display: none; flex: 1; overflow-y: auto; padding: 12px; flex-direction: column; gap: 10px; }
+.stab-panel.active { display: flex; }
+
+/* GENERATE PANEL */
+#prompt-label { font-size: 11px; color: var(--text3); font-family: var(--mono); letter-spacing: 0.05em; margin-bottom: 4px; }
+#prompt-input { width: 100%; background: var(--bg3); border: 1px solid var(--border); color: var(--text); font-family: var(--font); font-size: 13px; padding: 10px; border-radius: var(--radius); resize: none; height: 110px; line-height: 1.5; transition: border 0.15s; }
+#prompt-input:focus { outline: none; border-color: var(--border2); }
+#gen-btn { width: 100%; padding: 10px; background: var(--accent-dim); border: 1px solid var(--accent); color: var(--accent); font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; border-radius: var(--radius); cursor: pointer; transition: all 0.15s; }
+#gen-btn:hover:not(:disabled) { background: var(--accent); color: var(--bg); }
+#gen-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+#docx-btn { padding: 10px 12px; background: var(--bg3); border: 1px solid var(--border2); color: var(--text2); font-family: var(--mono); font-size: 12px; border-radius: var(--radius); cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+#docx-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+#docx-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+#docx-status { font-size: 11px; font-family: var(--mono); color: var(--text3); min-height: 14px; line-height: 1.5; }
+#docx-status.ok { color: var(--accent); }
+#docx-status.err { color: var(--red); }
+#gen-status { font-size: 11px; color: var(--text3); font-family: var(--mono); line-height: 1.5; min-height: 16px; }
+#gen-status.err { color: var(--red); }
+#gen-status.ok { color: var(--accent); }
+
+/* RULES PANEL */
+.rule-item { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 10px; display: flex; align-items: flex-start; gap: 8px; }
+.rule-toggle { margin-top: 1px; flex-shrink: 0; accent-color: var(--accent); cursor: pointer; }
+.rule-text { font-size: 12px; color: var(--text2); line-height: 1.5; }
+.rule-tag { font-family: var(--mono); font-size: 10px; color: var(--text3); margin-bottom: 2px; letter-spacing: 0.05em; }
+.section-label { font-size: 10px; font-family: var(--mono); color: var(--text3); letter-spacing: 0.1em; text-transform: uppercase; padding: 4px 0 2px; }
+
+/* HISTORY PANEL */
+.hist-item { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 10px; cursor: pointer; transition: border-color 0.15s; }
+.hist-item:hover { border-color: var(--border2); }
+.hist-date { font-family: var(--mono); font-size: 10px; color: var(--text3); }
+.hist-prompt { font-size: 12px; color: var(--text2); margin-top: 3px; line-height: 1.4; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.hist-del { float: right; background: none; border: none; color: var(--text3); cursor: pointer; font-size: 12px; padding: 0 0 0 6px; }
+.hist-del:hover { color: var(--red); }
+#hist-empty { font-size: 12px; color: var(--text3); font-family: var(--mono); text-align: center; padding: 20px 0; }
+#clear-hist-btn { width: 100%; margin-top: 8px; padding: 8px; background: none; border: 1px solid var(--red-dim); color: var(--red); font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; border-radius: var(--radius); cursor: pointer; transition: all 0.15s; }
+#clear-hist-btn:hover { background: var(--red-dim); }
+
+/* CANVAS */
+#canvas-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+#canvas-toolbar { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.tbtn { background: none; border: 1px solid var(--border); color: var(--text2); font-size: 11px; font-family: var(--mono); padding: 4px 10px; border-radius: var(--radius); cursor: pointer; transition: all 0.15s; letter-spacing: 0.04em; }
+.tbtn:hover { border-color: var(--border2); color: var(--text); }
+#current-name { font-family: var(--mono); font-size: 11px; color: var(--text3); margin-left: auto; }
+#bpmn-canvas { flex: 1; background: var(--bg2); }
+.djs-container { background: var(--bg2) !important; }
+
+/* API KEY MODAL */
+#modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center; }
+#modal-overlay.show { display: flex; }
+#modal { background: var(--bg2); border: 1px solid var(--border2); border-radius: 10px; padding: 24px; width: 420px; }
+#modal h2 { font-family: var(--mono); font-size: 14px; color: var(--accent); margin-bottom: 8px; letter-spacing: 0.05em; }
+#modal p { font-size: 12px; color: var(--text2); margin-bottom: 16px; line-height: 1.6; }
+#modal input { width: 100%; background: var(--bg3); border: 1px solid var(--border2); color: var(--text); font-family: var(--mono); font-size: 12px; padding: 10px; border-radius: var(--radius); margin-bottom: 12px; }
+#modal input:focus { outline: none; border-color: var(--accent); }
+#modal-save { width: 100%; padding: 10px; background: var(--accent-dim); border: 1px solid var(--accent); color: var(--accent); font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; border-radius: var(--radius); cursor: pointer; }
+#modal-save:hover { background: var(--accent); color: var(--bg); }
+#modal-link { font-size: 11px; color: var(--text3); margin-top: 8px; text-align: center; }
+#modal-link a { color: var(--accent); }
+
+/* scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<!-- API KEY MODAL -->
+<div id="modal-overlay">
+  <div id="modal">
+    <h2>// ANTHROPIC API KEY</h2>
+    <p>Inserisci la tua API key di Anthropic. Viene salvata nel browser (localStorage) e non verrà mai più richiesta su questo dispositivo.</p>
+    <input type="password" id="api-key-input" placeholder="sk-ant-api03-...">
+    <button id="modal-save" onclick="saveApiKey()">SALVA E CONTINUA →</button>
+    <p id="modal-link">Non hai una key? <a href="https://console.anthropic.com/account/keys" target="_blank">console.anthropic.com</a></p>
+  </div>
+</div>
+
+<!-- HEADER -->
+<div id="header">
+  <div id="header-left">
+    <div id="logo">BPMN<span>.</span>GEN</div>
+  </div>
+  <div id="header-right">
+    <div id="token-counter" title="Token usati in questa sessione">
+      <span class="tk-label">TOKEN</span>
+      <span class="tk-sep">·</span>
+      <span class="tk-label">in</span> <span class="tk-in" id="tk-in">0</span>
+      <span class="tk-sep">·</span>
+      <span class="tk-label">out</span> <span class="tk-out" id="tk-out">0</span>
+      <span class="tk-sep">·</span>
+      <span class="tk-label">tot</span> <span class="tk-total" id="tk-tot">0</span>
+    </div>
+    <div id="api-status" title="Stato API key"></div>
+    <button class="hbtn" onclick="showApiModal()">API KEY</button>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+  <!-- SIDEBAR -->
+  <div id="sidebar">
+    <div id="sidebar-tabs">
+      <div class="stab active" onclick="switchTab('generate')">GENERA</div>
+      <div class="stab" onclick="switchTab('rules')">REGOLE</div>
+      <div class="stab" onclick="switchTab('history')">STORICO</div>
+    </div>
+
+    <!-- GENERATE -->
+    <div class="stab-panel active" id="tab-generate">
+      <div>
+        <div id="prompt-label">// DESCRIVI IL PROCESSO</div>
+        <textarea id="prompt-input" placeholder="es. Processo di approvazione acquisti: il dipendente invia una richiesta, il manager verifica il budget, se approvato viene emesso l'ordine, altrimenti la richiesta viene rifiutata con motivazione."></textarea>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button id="gen-btn" onclick="generate()" style="flex:1;">▶ GENERA BPMN</button>
+        <button id="docx-btn" onclick="document.getElementById('docx-input').click()" title="Carica .docx: il testo viene compresso automaticamente nel campo descrizione">⬆ .DOCX</button>
+      </div>
+      <input type="file" id="docx-input" accept=".docx" style="display:none" onchange="loadDocx(this)">
+      <div id="gen-status"></div>
+      <div id="docx-status"></div>
+    </div>
+
+    <!-- RULES -->
+    <div class="stab-panel" id="tab-rules">
+      <div class="section-label">strutturali</div>
+      <label class="rule-item"><input type="checkbox" class="rule-toggle" id="r1" checked><div><div class="rule-tag">COMPLETEZZA</div><div class="rule-text">Ogni processo deve avere esattamente uno start event e almeno un end event con nome esplicito.</div></div></label>
+      <label class="rule-item"><input type="checkbox" class="rule-toggle" id="r2" checked><div><div class="rule-tag">CONNESSIONE</div><div class="rule-text">Nessun elemento rimane isolato: tutti i nodi devono essere connessi nel flusso.</div></div></label>
+      <label class="rule-item"><input type="checkbox" class="rule-toggle" id="r3" checked><div><div class="rule-tag">GATEWAY</div><div class="rule-text">Ogni gateway esclusivo ha almeno due uscite, ciascuna con label che indica la condizione.</div></div></label>
+      <div class="section-label">leggibilità</div>
+      <label class="rule-item"><input type="checkbox" class="rule-toggle" id="r4" checked><div><div class="rule-tag">NAMING TASK</div><div class="rule-text">I task usano la forma "Verbo + Oggetto" (es. "Verifica documento", "Approva richiesta").</div></div></label>
+      <label class="rule-item"><input type="checkbox" class="rule-toggle" id="r5" checked><div><div class="rule-tag">FLUSSO</div><div class="rule-text">Il flusso principale si sviluppa da sinistra a destra.</div></div></label>
+      <label class="rule-item"><input type="checkbox" class="rule-toggle" id="r6"><div><div class="rule-tag">SWIM LANE</div><div class="rule-text">Se ci sono più attori coinvolti, usare swim lane separate per ognuno.</div></div></label>
+      <div class="section-label">qualità</div>
+      <label class="rule-item"><input type="checkbox" class="rule-toggle" id="r7" checked><div><div class="rule-tag">END EVENT</div><div class="rule-text">Ogni end event descrive l'esito del processo (es. "Approvato", "Rifiutato", "Completato").</div></div></label>
+      <label class="rule-item"><input type="checkbox" class="rule-toggle" id="r8"><div><div class="rule-tag">ERROR EVENTS</div><div class="rule-text">Aggiungere boundary error event sui task critici che possono fallire.</div></div></label>
+      <label class="rule-item"><input type="checkbox" class="rule-toggle" id="r9"><div><div class="rule-tag">TIMEOUT</div><div class="rule-text">Aggiungere timer boundary event sui task di approvazione umana.</div></div></label>
+    </div>
+
+    <!-- HISTORY -->
+    <div class="stab-panel" id="tab-history">
+      <div id="hist-list"></div>
+      <button id="clear-hist-btn" onclick="clearHistory()">✕ Svuota storico</button>
+    </div>
+  </div>
+
+  <!-- CANVAS -->
+  <div id="canvas-area">
+    <div id="canvas-toolbar">
+      <button class="tbtn" onclick="fitView()">⊙ FIT</button>
+      <button class="tbtn" onclick="zoomIn()">+ ZOOM</button>
+      <button class="tbtn" onclick="zoomOut()">− ZOOM</button>
+      <button class="tbtn" onclick="downloadBpmn()">↓ .BPMN</button>
+      <button class="tbtn" onclick="downloadSvg()">↓ .SVG</button>
+      <div id="current-name">nessun diagramma</div>
+    </div>
+    <div id="bpmn-canvas"></div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/bpmn-js@17.11.1/dist/bpmn-modeler.development.js"></script>
+<script>
+// ── STATE ──────────────────────────────────────────────────────────────────
+let modeler = null;
+let currentXml = '';
+let currentName = '';
+let sessionTokens = { input: 0, output: 0 };
+
+const RULES = {
+  r1: 'Ogni processo deve avere esattamente uno startEvent e almeno un endEvent con nome esplicito che descriva l\'esito.',
+  r2: 'Nessun elemento deve essere isolato: tutti i nodi devono essere connessi tramite sequenceFlow.',
+  r3: 'Ogni exclusiveGateway deve avere almeno due uscite, ciascuna con condizione esplicita nella label del sequenceFlow.',
+  r4: 'I nomi dei task devono usare la forma "Verbo + Oggetto" (es. "Verifica documento", "Approva richiesta", "Invia notifica").',
+  r5: 'Il flusso principale si sviluppa da sinistra a destra: gli elementi devono avere coordinate x crescenti.',
+  r6: 'Se ci sono più attori o reparti coinvolti, utilizzare swim lane (lane) separate per ciascuno all\'interno di un pool.',
+  r7: 'Ogni endEvent deve avere un nome che descriva l\'esito specifico del processo (es. "Approvato", "Rifiutato", "Ordine emesso").',
+  r8: 'Aggiungere boundaryEvent di tipo error sui task critici che potrebbero fallire, con un percorso di gestione errore.',
+  r9: 'Aggiungere timerBoundaryEvent sui task di approvazione umana (userTask) per gestire i casi di timeout/scadenza.'
+};
+
+// ── INIT ───────────────────────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  initModeler();
+  checkApiKey();
+  renderHistory();
+  loadExample();
+});
+
+function initModeler() {
+  modeler = new BpmnJS({ container: '#bpmn-canvas' });
+}
+
+function checkApiKey() {
+  const key = localStorage.getItem('anthropic_key');
+  const dot = document.getElementById('api-status');
+  if (key && key.startsWith('sk-')) {
+    dot.className = 'ok';
+  } else {
+    dot.className = 'err';
+    showApiModal();
+  }
+}
+
+// ── API KEY MODAL ──────────────────────────────────────────────────────────
+function showApiModal() {
+  document.getElementById('modal-overlay').classList.add('show');
+  const saved = localStorage.getItem('anthropic_key');
+  if (saved) document.getElementById('api-key-input').value = saved;
+}
+
+function saveApiKey() {
+  const val = document.getElementById('api-key-input').value.trim();
+  if (!val.startsWith('sk-')) {
+    alert('La API key deve iniziare con "sk-"');
+    return;
+  }
+  localStorage.setItem('anthropic_key', val);
+  document.getElementById('modal-overlay').classList.remove('show');
+  document.getElementById('api-status').className = 'ok';
+}
+
+document.getElementById('api-key-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') saveApiKey();
+});
+
+// ── TABS ───────────────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.stab').forEach((t,i) => {
+    const panels = ['generate','rules','history'];
+    t.classList.toggle('active', panels[i] === name);
+  });
+  document.querySelectorAll('.stab-panel').forEach(p => {
+    p.classList.toggle('active', p.id === 'tab-' + name);
+  });
+  if (name === 'history') renderHistory();
+}
+
+// ── RULES BUILDER ──────────────────────────────────────────────────────────
+function getActiveRules() {
+  return Object.entries(RULES)
+    .filter(([id]) => document.getElementById(id)?.checked)
+    .map(([, text]) => '- ' + text)
+    .join('\n');
+}
+
+// ── GENERATE ──────────────────────────────────────────────────────────────
+async function generate() {
+  const prompt = document.getElementById('prompt-input').value.trim();
+  if (!prompt) { setStatus('Inserisci una descrizione del processo.', 'err'); return; }
+  const key = localStorage.getItem('anthropic_key');
+  if (!key) { showApiModal(); return; }
+
+  document.getElementById('gen-btn').disabled = true;
+  setStatus('Generazione in corso...', '');
+
+  const rules = getActiveRules();
+
+  const systemPrompt = `Sei un esperto BPMN 2.0. Generi SEMPRE XML BPMN 2.0 completo e valido.
+Rispondi SOLO con l'XML grezzo. Niente testo prima o dopo. Niente markdown. Niente backtick.
+
+STRUTTURA OBBLIGATORIA - copia esattamente questa struttura:
+
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+             xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+             xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+             id="definitions1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <process id="process1" isExecutable="false">
+    <!-- elementi processo -->
+  </process>
+  <bpmndi:BPMNDiagram id="diagram1">
+    <bpmndi:BPMNPlane id="plane1" bpmnElement="process1">
+      <!-- shapes e edges -->
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</definitions>
+
+REGOLE BPMN:
+${rules}
+
+REGOLE XML CRITICHE:
+- USA SEMPRE e SOLO il namespace prefix "bpmndi:" per BPMNDiagram, BPMNPlane, BPMNShape, BPMNEdge
+- USA SEMPRE e SOLO il namespace prefix "dc:" per Bounds
+- USA SEMPRE e SOLO il namespace prefix "di:" per waypoint
+- Ogni BPMNShape deve avere bpmnElement= con l'id dell'elemento corrispondente
+- Ogni BPMNEdge deve avere bpmnElement= con l'id del sequenceFlow corrispondente
+- startEvent/endEvent: width="36" height="36"
+- userTask/task: width="100" height="80"
+- exclusiveGateway: width="50" height="50", aggiungi isMarkerVisible="true"
+- Posizione: x=150 per il primo elemento, incrementa di 180px, y=200 per flusso principale
+- Rami alternativi (gateway No): y=340
+- Waypoint: collega centro-destra source con centro-sinistra target
+- Chiudi SEMPRE </definitions> come ultimo tag
+- Non usare caratteri speciali XML nei name: no &, no <, no >, no "`;
+
+  try {
+    const data = await callApi(key, systemPrompt,
+      `Genera il BPMN 2.0 XML completo per questo processo:\n${prompt}`, 6000);
+
+    if (data.error) throw new Error(data.error.message);
+    updateTokens(data.usage);
+
+    let xml = data.content[0].text.trim();
+    // pulizia robusta
+    xml = xml.replace(/```xml\s*/gi, '').replace(/```\s*/g, '').trim();
+    const startIdx = xml.indexOf('<?xml') !== -1 ? xml.indexOf('<?xml') : xml.indexOf('<definitions');
+    if (startIdx > 0) xml = xml.slice(startIdx);
+    const endIdx = xml.lastIndexOf('</definitions>');
+    if (endIdx !== -1) xml = xml.slice(0, endIdx + '</definitions>'.length);
+
+    // validazione minima
+    if (!xml.includes('<definitions') || !xml.includes('</definitions>'))
+      throw new Error('XML incompleto ricevuto. Riprova.');
+    if (!xml.includes('bpmndi:BPMNDiagram'))
+      throw new Error('Sezione layout mancante. Riprova.');
+
+    // render con fallback automatico
+    try {
+      await tryRender(xml);
+    } catch(renderErr) {
+      setStatus('Correggo errori automaticamente...', '');
+      const fixData = await callApi(key,
+        `Sei un esperto BPMN 2.0. Correggi l'XML e restituisci SOLO l'XML valido completo, zero testo.`,
+        `Errore: "${renderErr.message}"\n\nXML da correggere:\n${xml}`, 6000);
+      updateTokens(fixData.usage);
+      let fixed = fixData.content[0].text.trim()
+        .replace(/```xml\s*/gi, '').replace(/```\s*/g, '').trim();
+      const fi = fixed.indexOf('<?xml') !== -1 ? fixed.indexOf('<?xml') : fixed.indexOf('<definitions');
+      if (fi > 0) fixed = fixed.slice(fi);
+      const fe = fixed.lastIndexOf('</definitions>');
+      if (fe !== -1) fixed = fixed.slice(0, fe + '</definitions>'.length);
+      await tryRender(fixed);
+      xml = fixed;
+    }
+
+    currentXml = xml;
+    currentName = prompt.slice(0, 40) + (prompt.length > 40 ? '...' : '');
+    document.getElementById('current-name').textContent = currentName;
+    saveToHistory(prompt, xml);
+    setStatus('✓ Diagramma generato', 'ok');
+
+  } catch(e) {
+    setStatus('Errore: ' + e.message, 'err');
+  } finally {
+    document.getElementById('gen-btn').disabled = false;
+  }
+}
+
+async function callApi(key, system, userMsg, maxTokens = 4000) {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-5',
+      max_tokens: maxTokens,
+      system,
+      messages: [{ role: 'user', content: userMsg }]
+    })
+  });
+  return res.json();
+}
+
+async function tryRender(xml) {
+  await modeler.importXML(xml);
+  fitView();
+}
+
+function updateTokens(usage) {
+  if (!usage) return;
+  sessionTokens.input += usage.input_tokens || 0;
+  sessionTokens.output += usage.output_tokens || 0;
+  document.getElementById('tk-in').textContent = sessionTokens.input.toLocaleString('it-IT');
+  document.getElementById('tk-out').textContent = sessionTokens.output.toLocaleString('it-IT');
+  document.getElementById('tk-tot').textContent = (sessionTokens.input + sessionTokens.output).toLocaleString('it-IT');
+}
+
+// ── DOCX LOADER ───────────────────────────────────────────────────────────
+async function loadDocx(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const key = localStorage.getItem('anthropic_key');
+  if (!key) { showApiModal(); return; }
+
+  setDocxStatus('Lettura documento...', '');
+  document.getElementById('docx-btn').disabled = true;
+  document.getElementById('gen-btn').disabled = true;
+
+  try {
+    // read docx with mammoth
+    const arrayBuffer = await file.arrayBuffer();
+    const mammoth = await loadMammoth();
+    const result = await mammoth.extractRawText({ arrayBuffer });
+    const rawText = result.value.trim();
+    if (!rawText) throw new Error('Documento vuoto o non leggibile');
+
+    setDocxStatus('Compressione in corso...', '');
+
+    const compressPrompt = `Sei un esperto di analisi processi e notazione BPMN 2.0. Leggi il documento e trasformalo in un formato compatto e strutturato, ottimizzato per un generatore BPMN automatico. Usa il minor numero di token possibile con la massima precisione sul flusso.
+
+Restituisci SOLO il testo compatto, nessuna spiegazione, nessun commento, nessun markdown.
+
+Formato da usare:
+POOL:[nome processo]
+LANES:[lane1|lane2|lane3]
+START:[evento avvio]
+T[n]:[nome task][Lane]
+GW[n]:[domanda decisionale]
+  SI->[id]
+  NO->[id]
+E[n]:[nome evento errore/intermedio]
+END[n]:[nome evento chiusura con esito]
+FLOW:[id]->[id]->[id]
+
+REGOLE:
+- Id univoci: T1,T2,GW1,GW2,E1,END1 ecc.
+- Task: lane tra parentesi quadre
+- Gateway: sempre con tutte le uscite etichettate
+- FLOW: sequenza principale da START a END
+- Mantieni nomi tecnici originali (SAP, codici, sigle)
+- Ignora note, tabelle di supporto, punti da chiarire, intestazioni
+
+DOCUMENTO:
+${rawText.slice(0, 6000)}`;
+
+    const data = await callApi(key,
+      'Sei un esperto BPMN. Restituisci SOLO il testo compatto richiesto, zero altro.',
+      compressPrompt, 2000);
+
+    if (data.error) throw new Error(data.error.message);
+    updateTokens(data.usage);
+
+    const compressed = data.content[0].text.trim();
+    document.getElementById('prompt-input').value = compressed;
+    setDocxStatus('✓ Documento compresso e inserito — premi Genera BPMN', 'ok');
+
+  } catch(e) {
+    setDocxStatus('Errore: ' + e.message, 'err');
+  } finally {
+    document.getElementById('docx-btn').disabled = false;
+    document.getElementById('gen-btn').disabled = false;
+    input.value = '';
+  }
+}
+
+function setDocxStatus(msg, type) {
+  const el = document.getElementById('docx-status');
+  el.textContent = msg;
+  el.className = type;
+}
+
+let _mammoth = null;
+async function loadMammoth() {
+  if (_mammoth) return _mammoth;
+  await new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js';
+    s.onload = res; s.onerror = rej;
+    document.head.appendChild(s);
+  });
+  _mammoth = window.mammoth;
+  return _mammoth;
+}
+
+function setStatus(msg, type) {
+  const el = document.getElementById('gen-status');
+  el.textContent = msg;
+  el.className = type;
+}
+
+// ── HISTORY ────────────────────────────────────────────────────────────────
+function saveToHistory(prompt, xml) {
+  const history = JSON.parse(localStorage.getItem('bpmn_history') || '[]');
+  history.unshift({ id: Date.now(), date: new Date().toLocaleString('it-IT'), prompt, xml });
+  if (history.length > 50) history.pop();
+  localStorage.setItem('bpmn_history', JSON.stringify(history));
+}
+
+function renderHistory() {
+  const history = JSON.parse(localStorage.getItem('bpmn_history') || '[]');
+  const list = document.getElementById('hist-list');
+  if (!history.length) {
+    list.innerHTML = '<div id="hist-empty">// nessuna generazione</div>';
+    return;
+  }
+  list.innerHTML = history.map(h => `
+    <div class="hist-item" onclick="loadFromHistory(${h.id})">
+      <button class="hist-del" onclick="event.stopPropagation();deleteHistory(${h.id})">✕</button>
+      <div class="hist-date">${h.date}</div>
+      <div class="hist-prompt">${h.prompt}</div>
+    </div>
+  `).join('');
+}
+
+async function loadFromHistory(id) {
+  const history = JSON.parse(localStorage.getItem('bpmn_history') || '[]');
+  const item = history.find(h => h.id === id);
+  if (!item) return;
+  currentXml = item.xml;
+  currentName = item.prompt.slice(0, 40) + '...';
+  document.getElementById('current-name').textContent = currentName;
+  await tryRender(item.xml);
+  switchTab('generate');
+  setStatus('✓ Caricato dallo storico', 'ok');
+}
+
+function clearHistory() {
+  if (!confirm('Cancellare tutto lo storico? Questa azione non è reversibile.')) return;
+  localStorage.removeItem('bpmn_history');
+  renderHistory();
+}
+
+function deleteHistory(id) {
+  let history = JSON.parse(localStorage.getItem('bpmn_history') || '[]');
+  history = history.filter(h => h.id !== id);
+  localStorage.setItem('bpmn_history', JSON.stringify(history));
+  renderHistory();
+}
+
+// ── CANVAS ACTIONS ─────────────────────────────────────────────────────────
+function fitView() {
+  try { modeler.get('canvas').zoom('fit-viewport', 'auto'); } catch(e) {}
+}
+function zoomIn() {
+  try { const c = modeler.get('canvas'); c.zoom(c.zoom() * 1.2); } catch(e) {}
+}
+function zoomOut() {
+  try { const c = modeler.get('canvas'); c.zoom(c.zoom() * 0.8); } catch(e) {}
+}
+
+async function downloadBpmn() {
+  if (!currentXml) { setStatus('Nessun diagramma da scaricare.', 'err'); return; }
+  const blob = new Blob([currentXml], { type: 'application/xml' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url;
+  a.download = 'processo.bpmn'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function downloadSvg() {
+  try {
+    const { svg } = await modeler.saveSVG();
+    const blob = new Blob([svg], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url;
+    a.download = 'processo.svg'; a.click();
+    URL.revokeObjectURL(url);
+  } catch(e) { setStatus('Errore export SVG', 'err'); }
+}
+
+// ── EXAMPLE ────────────────────────────────────────────────────────────────
+async function loadExample() {
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="def1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <process id="proc1" isExecutable="false">
+    <startEvent id="start" name="Richiesta ricevuta"/>
+    <sequenceFlow id="f1" sourceRef="start" targetRef="task1"/>
+    <userTask id="task1" name="Verifica documenti"/>
+    <sequenceFlow id="f2" sourceRef="task1" targetRef="gw1"/>
+    <exclusiveGateway id="gw1" name="Documenti completi?"/>
+    <sequenceFlow id="f3" sourceRef="gw1" targetRef="task2" name="Sì"/>
+    <sequenceFlow id="f4" sourceRef="gw1" targetRef="task3" name="No"/>
+    <userTask id="task2" name="Approva richiesta"/>
+    <userTask id="task3" name="Richiedi integrazioni"/>
+    <sequenceFlow id="f5" sourceRef="task2" targetRef="end1"/>
+    <sequenceFlow id="f6" sourceRef="task3" targetRef="task1"/>
+    <endEvent id="end1" name="Approvato"/>
+  </process>
+  <bpmndi:BPMNDiagram id="diag1">
+    <bpmndi:BPMNPlane id="plane1" bpmnElement="proc1">
+      <bpmndi:BPMNShape id="s_start" bpmnElement="start"><dc:Bounds x="152" y="162" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_task1" bpmnElement="task1"><dc:Bounds x="250" y="140" width="100" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_gw1" bpmnElement="gw1" isMarkerVisible="true"><dc:Bounds x="410" y="155" width="50" height="50"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_task2" bpmnElement="task2"><dc:Bounds x="520" y="140" width="100" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_task3" bpmnElement="task3"><dc:Bounds x="520" y="270" width="100" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_end1" bpmnElement="end1"><dc:Bounds x="682" y="162" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="e_f1" bpmnElement="f1"><di:waypoint x="188" y="180"/><di:waypoint x="250" y="180"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_f2" bpmnElement="f2"><di:waypoint x="350" y="180"/><di:waypoint x="410" y="180"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_f3" bpmnElement="f3"><di:waypoint x="460" y="180"/><di:waypoint x="520" y="180"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_f4" bpmnElement="f4"><di:waypoint x="435" y="205"/><di:waypoint x="435" y="310"/><di:waypoint x="520" y="310"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_f5" bpmnElement="f5"><di:waypoint x="620" y="180"/><di:waypoint x="682" y="180"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_f6" bpmnElement="f6"><di:waypoint x="570" y="350"/><di:waypoint x="300" y="350"/><di:waypoint x="300" y="220"/></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</definitions>`;
+  currentXml = xml;
+  currentName = 'Esempio: approvazione documenti';
+  document.getElementById('current-name').textContent = currentName;
+  await tryRender(xml);
+}
+</script>
+</body>
+</html>
