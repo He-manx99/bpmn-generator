@@ -576,9 +576,12 @@ async function loadFromHistory(id) {
 }
 
 function clearHistory() {
-  if (!confirm('Cancellare tutto lo storico? Questa azione non è reversibile.')) return;
   localStorage.removeItem('bpmn_history');
+  currentXml = '';
+  currentName = '';
+  document.getElementById('current-name').textContent = 'nessun diagramma';
   renderHistory();
+  setStatus('Storico cancellato.', 'ok');
 }
 
 function deleteHistory(id) {
