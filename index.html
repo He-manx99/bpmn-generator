@@ -249,6 +249,7 @@ window.addEventListener('load', () => {
   initModeler();
   checkApiKey();
   renderHistory();
+  loadExample();
 });
 
 function initModeler() {
@@ -323,45 +324,53 @@ async function generate() {
   const systemPrompt = `Sei un esperto BPMN 2.0. Generi SEMPRE XML BPMN 2.0 completo e valido.
 Rispondi SOLO con l'XML grezzo. Niente testo prima o dopo. Niente markdown. Niente backtick.
 
-STRUTTURA OBBLIGATORIA - copia esattamente questa struttura:
-
-<?xml version="1.0" encoding="UTF-8"?>
-<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
-             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
-             xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
-             xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
-             id="definitions1" targetNamespace="http://bpmn.io/schema/bpmn">
-  <process id="process1" isExecutable="false">
-    <!-- elementi processo -->
-  </process>
-  <bpmndi:BPMNDiagram id="diagram1">
-    <bpmndi:BPMNPlane id="plane1" bpmnElement="process1">
-      <!-- shapes e edges -->
-    </bpmndi:BPMNPlane>
-  </bpmndi:BPMNDiagram>
-</definitions>
-
 REGOLE BPMN:
 ${rules}
 
 REGOLE XML CRITICHE:
-- USA SEMPRE e SOLO il namespace prefix "bpmndi:" per BPMNDiagram, BPMNPlane, BPMNShape, BPMNEdge
-- USA SEMPRE e SOLO il namespace prefix "dc:" per Bounds
-- USA SEMPRE e SOLO il namespace prefix "di:" per waypoint
-- Ogni BPMNShape deve avere bpmnElement= con l'id dell'elemento corrispondente
-- Ogni BPMNEdge deve avere bpmnElement= con l'id del sequenceFlow corrispondente
+- Ogni id nel <process> deve corrispondere ESATTAMENTE al bpmnElement= nel BPMNDiagram (case-sensitive)
+- Ogni sourceRef e targetRef nei sequenceFlow devono puntare a id esistenti nel <process>
+- USA SOLO prefissi: "bpmndi:" per BPMNDiagram/BPMNPlane/BPMNShape/BPMNEdge, "dc:" per Bounds, "di:" per waypoint
 - startEvent/endEvent: width="36" height="36"
-- userTask/task: width="100" height="80"
-- exclusiveGateway: width="50" height="50", aggiungi isMarkerVisible="true"
-- Posizione: x=150 per il primo elemento, incrementa di 180px, y=200 per flusso principale
-- Rami alternativi (gateway No): y=340
-- Waypoint: collega centro-destra source con centro-sinistra target
+- userTask/task: width="100" height="80"  
+- exclusiveGateway: width="50" height="50" isMarkerVisible="true"
+- Posizione: x=150 primo elemento, incrementa x di 180px. Flusso principale y=200, rami alternativi y=360
+- Waypoint: usa centro-destra di source e centro-sinistra di target
+- Non usare caratteri speciali XML nei name: no &, no <, no >, no "
 - Chiudi SEMPRE </definitions> come ultimo tag
-- Non usare caratteri speciali XML nei name: no &, no <, no >, no "`;
+
+ESEMPIO MINIMO (rispetta ESATTAMENTE questa struttura):
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="def1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <process id="proc1" isExecutable="false">
+    <startEvent id="start1" name="Inizio"/>
+    <sequenceFlow id="sf1" sourceRef="start1" targetRef="task1"/>
+    <userTask id="task1" name="Esegui attivita"/>
+    <sequenceFlow id="sf2" sourceRef="task1" targetRef="gw1"/>
+    <exclusiveGateway id="gw1" name="Esito OK?"/>
+    <sequenceFlow id="sf3" sourceRef="gw1" targetRef="end1" name="Si"/>
+    <sequenceFlow id="sf4" sourceRef="gw1" targetRef="end2" name="No"/>
+    <endEvent id="end1" name="Completato"/>
+    <endEvent id="end2" name="Rifiutato"/>
+  </process>
+  <bpmndi:BPMNDiagram id="diag1">
+    <bpmndi:BPMNPlane id="plane1" bpmnElement="proc1">
+      <bpmndi:BPMNShape id="sh_start1" bpmnElement="start1"><dc:Bounds x="152" y="182" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_task1" bpmnElement="task1"><dc:Bounds x="250" y="160" width="100" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_gw1" bpmnElement="gw1" isMarkerVisible="true"><dc:Bounds x="422" y="175" width="50" height="50"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_end1" bpmnElement="end1"><dc:Bounds x="554" y="182" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_end2" bpmnElement="end2"><dc:Bounds x="554" y="342" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="ed_sf1" bpmnElement="sf1"><di:waypoint x="188" y="200"/><di:waypoint x="250" y="200"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ed_sf2" bpmnElement="sf2"><di:waypoint x="350" y="200"/><di:waypoint x="422" y="200"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ed_sf3" bpmnElement="sf3"><di:waypoint x="472" y="200"/><di:waypoint x="554" y="200"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ed_sf4" bpmnElement="sf4"><di:waypoint x="447" y="225"/><di:waypoint x="447" y="360"/><di:waypoint x="554" y="360"/></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</definitions>`;
 
   try {
     const data = await callApi(key, systemPrompt,
-      `Genera il BPMN 2.0 XML completo per questo processo:\n${prompt}`, 6000);
+      `Genera il BPMN 2.0 XML completo per questo processo:\n${prompt}`, 8000);
 
     if (data.error) throw new Error(data.error.message);
     updateTokens(data.usage);
@@ -386,8 +395,8 @@ REGOLE XML CRITICHE:
     } catch(renderErr) {
       setStatus('Correggo errori automaticamente...', '');
       const fixData = await callApi(key,
-        `Sei un esperto BPMN 2.0. Correggi l'XML e restituisci SOLO l'XML valido completo, zero testo.`,
-        `Errore: "${renderErr.message}"\n\nXML da correggere:\n${xml}`, 6000);
+        `Sei un esperto BPMN 2.0. Correggi l'XML e restituisci SOLO l'XML valido completo, zero testo, zero backtick.\nREGOLA CRITICA: ogni bpmnElement= nelle BPMNShape/BPMNEdge deve corrispondere ESATTAMENTE a un id definito nel <process>. Ogni sourceRef/targetRef deve puntare a id esistenti.`,
+        `ERRORI DA CORREGGERE:\n${renderErr.message}\n\nXML ORIGINALE:\n${xml}`, 8000);
       updateTokens(fixData.usage);
       let fixed = fixData.content[0].text.trim()
         .replace(/```xml\s*/gi, '').replace(/```\s*/g, '').trim();
@@ -431,7 +440,58 @@ async function callApi(key, system, userMsg, maxTokens = 4000) {
   return res.json();
 }
 
+async function validateXml(xml) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xml, 'application/xml');
+  const parseErr = doc.querySelector('parsererror');
+  if (parseErr) throw new Error('XML malformato: ' + parseErr.textContent.slice(0, 120));
+
+  // Raccogli tutti gli id definiti nel <process>
+  const ns = 'http://www.omg.org/spec/BPMN/20100524/MODEL';
+  const processEl = doc.getElementsByTagNameNS(ns, 'process')[0]
+                 || doc.querySelector('process');
+  if (!processEl) throw new Error('Elemento <process> mancante nell\'XML.');
+
+  const definedIds = new Set();
+  for (const el of processEl.querySelectorAll('[id]')) {
+    definedIds.add(el.getAttribute('id'));
+  }
+  // anche id del process stesso
+  if (processEl.getAttribute('id')) definedIds.add(processEl.getAttribute('id'));
+
+  const errors = [];
+
+  // Verifica sourceRef / targetRef nei sequenceFlow
+  for (const sf of processEl.querySelectorAll('sequenceFlow, [*|sequenceFlow]')) {
+    const id  = sf.getAttribute('id') || '?';
+    const src = sf.getAttribute('sourceRef');
+    const tgt = sf.getAttribute('targetRef');
+    if (src && !definedIds.has(src)) errors.push(`sequenceFlow "${id}": sourceRef="${src}" non trovato`);
+    if (tgt && !definedIds.has(tgt)) errors.push(`sequenceFlow "${id}": targetRef="${tgt}" non trovato`);
+  }
+
+  // Verifica bpmnElement nelle BPMNShape
+  const diNs = 'http://www.omg.org/spec/BPMN/20100524/DI';
+  const shapes = doc.querySelectorAll('BPMNShape');
+  for (const sh of shapes) {
+    const ref = sh.getAttribute('bpmnElement');
+    if (ref && !definedIds.has(ref)) errors.push(`BPMNShape bpmnElement="${ref}" non trovato nel process`);
+  }
+
+  // Verifica bpmnElement nelle BPMNEdge
+  const edges = doc.querySelectorAll('BPMNEdge');
+  for (const ed of edges) {
+    const ref = ed.getAttribute('bpmnElement');
+    if (ref && !definedIds.has(ref)) errors.push(`BPMNEdge bpmnElement="${ref}" non trovato nel process`);
+  }
+
+  if (errors.length > 0) {
+    throw new Error('Riferimenti ID non validi:\n' + errors.slice(0, 6).join('\n'));
+  }
+}
+
 async function tryRender(xml) {
+  await validateXml(xml);
   await modeler.importXML(xml);
   fitView();
 }
@@ -575,12 +635,9 @@ async function loadFromHistory(id) {
 }
 
 function clearHistory() {
+  if (!confirm('Cancellare tutto lo storico? Questa azione non è reversibile.')) return;
   localStorage.removeItem('bpmn_history');
-  currentXml = '';
-  currentName = '';
-  document.getElementById('current-name').textContent = 'nessun diagramma';
   renderHistory();
-  setStatus('Storico cancellato.', 'ok');
 }
 
 function deleteHistory(id) {
@@ -621,7 +678,46 @@ async function downloadSvg() {
   } catch(e) { setStatus('Errore export SVG', 'err'); }
 }
 
-
+// ── EXAMPLE ────────────────────────────────────────────────────────────────
+async function loadExample() {
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="def1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <process id="proc1" isExecutable="false">
+    <startEvent id="start" name="Richiesta ricevuta"/>
+    <sequenceFlow id="f1" sourceRef="start" targetRef="task1"/>
+    <userTask id="task1" name="Verifica documenti"/>
+    <sequenceFlow id="f2" sourceRef="task1" targetRef="gw1"/>
+    <exclusiveGateway id="gw1" name="Documenti completi?"/>
+    <sequenceFlow id="f3" sourceRef="gw1" targetRef="task2" name="Sì"/>
+    <sequenceFlow id="f4" sourceRef="gw1" targetRef="task3" name="No"/>
+    <userTask id="task2" name="Approva richiesta"/>
+    <userTask id="task3" name="Richiedi integrazioni"/>
+    <sequenceFlow id="f5" sourceRef="task2" targetRef="end1"/>
+    <sequenceFlow id="f6" sourceRef="task3" targetRef="task1"/>
+    <endEvent id="end1" name="Approvato"/>
+  </process>
+  <bpmndi:BPMNDiagram id="diag1">
+    <bpmndi:BPMNPlane id="plane1" bpmnElement="proc1">
+      <bpmndi:BPMNShape id="s_start" bpmnElement="start"><dc:Bounds x="152" y="162" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_task1" bpmnElement="task1"><dc:Bounds x="250" y="140" width="100" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_gw1" bpmnElement="gw1" isMarkerVisible="true"><dc:Bounds x="410" y="155" width="50" height="50"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_task2" bpmnElement="task2"><dc:Bounds x="520" y="140" width="100" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_task3" bpmnElement="task3"><dc:Bounds x="520" y="270" width="100" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_end1" bpmnElement="end1"><dc:Bounds x="682" y="162" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="e_f1" bpmnElement="f1"><di:waypoint x="188" y="180"/><di:waypoint x="250" y="180"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_f2" bpmnElement="f2"><di:waypoint x="350" y="180"/><di:waypoint x="410" y="180"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_f3" bpmnElement="f3"><di:waypoint x="460" y="180"/><di:waypoint x="520" y="180"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_f4" bpmnElement="f4"><di:waypoint x="435" y="205"/><di:waypoint x="435" y="310"/><di:waypoint x="520" y="310"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_f5" bpmnElement="f5"><di:waypoint x="620" y="180"/><di:waypoint x="682" y="180"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_f6" bpmnElement="f6"><di:waypoint x="570" y="350"/><di:waypoint x="300" y="350"/><di:waypoint x="300" y="220"/></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</definitions>`;
+  currentXml = xml;
+  currentName = 'Esempio: approvazione documenti';
+  document.getElementById('current-name').textContent = currentName;
+  await tryRender(xml);
+}
 </script>
 </body>
 </html>
