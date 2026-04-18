@@ -321,22 +321,24 @@ async function generate() {
 
   const rules = getActiveRules();
 
-  const systemPrompt = `Sei un esperto BPMN 2.0. Output: SOLO XML grezzo, zero testo, zero markdown, zero backtick.
-
-REGOLE PROCESSO:
-${rules}
-
-REGOLE XML (critiche):
-IDs: ogni id nel <process> e in <collaboration>/<participant> deve corrispondere ESATTAMENTE al bpmnElement= nel BPMNDiagram (case-sensitive)
-FLOW: sourceRef/targetRef devono puntare a id esistenti
-NS: bpmndi:→BPMNDiagram/Plane/Shape/Edge | dc:→Bounds | di:→waypoint
-POOL: se usi collaboration, metti partecipante/processo FUORI da <process>, raccoglili in <collaboration>
-SIZES: startEvent/endEvent=36x36 | task/userTask=100x80 | exclusiveGateway=50x50 isMarkerVisible="true"
-LAYOUT: x=150 inizio, +180px per elemento. y=200 flusso principale, y=360 rami alternativi
-WAYPOINTS: centro-destra source → centro-sinistra target
-CHARS: nei name vietati: & < > "
-NAMING: prefissa ogni elemento con il suo codice: task→"T1 - Nome", gateway→"GW1 - Nome", startEvent→"START - Nome", endEvent→"END1 - Nome", "END2 - Nome" ecc.
-CHIUDI: l'ultimo tag deve essere sempre /definitions`;
+  const systemPrompt = [
+    'Sei un esperto BPMN 2.0. Output: SOLO XML grezzo, zero testo, zero markdown, zero backtick.',
+    '',
+    'REGOLE PROCESSO:',
+    rules,
+    '',
+    'REGOLE XML (critiche):',
+    'IDs: ogni id nel process e in collaboration/participant deve corrispondere ESATTAMENTE al bpmnElement nel BPMNDiagram (case-sensitive)',
+    'FLOW: sourceRef e targetRef devono puntare a id esistenti',
+    'NS: usa prefisso bpmndi per BPMNDiagram, BPMNPlane, BPMNShape, BPMNEdge; usa dc per Bounds; usa di per waypoint',
+    'POOL: se usi collaboration, metti participant e process fuori da process, raccoglili in collaboration',
+    'SIZES: startEvent e endEvent 36x36, task e userTask 100x80, exclusiveGateway 50x50 con isMarkerVisible true',
+    'LAYOUT: x=150 inizio, incrementa di 180px per elemento. y=200 flusso principale, y=360 rami alternativi',
+    'WAYPOINTS: centro-destra del source verso centro-sinistra del target',
+    'CHARS: nei name sono vietati ampersand, minore di, maggiore di, virgolette doppie',
+    'NAMING: prefissa ogni elemento con il suo codice: i task usano T1-Nome, i gateway usano GW1-Nome, startEvent usa START-Nome, endEvent usa END1-Nome',
+    'CHIUDI: /definitions deve essere sempre l ultimo tag del documento'
+  ].join('\n');
 
   try {
     const data = await callApi(key, systemPrompt,
