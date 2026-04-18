@@ -321,52 +321,21 @@ async function generate() {
 
   const rules = getActiveRules();
 
-  const systemPrompt = `Sei un esperto BPMN 2.0. Generi SEMPRE XML BPMN 2.0 completo e valido.
-Rispondi SOLO con l'XML grezzo. Niente testo prima o dopo. Niente markdown. Niente backtick.
+  const systemPrompt = `Sei un esperto BPMN 2.0. Output: SOLO XML grezzo, zero testo, zero markdown, zero backtick.
 
-REGOLE BPMN:
+REGOLE PROCESSO:
 ${rules}
 
-REGOLE XML CRITICHE:
-- Ogni id nel <process> deve corrispondere ESATTAMENTE al bpmnElement= nel BPMNDiagram (case-sensitive)
-- Ogni sourceRef e targetRef nei sequenceFlow devono puntare a id esistenti nel <process>
-- USA SOLO prefissi: "bpmndi:" per BPMNDiagram/BPMNPlane/BPMNShape/BPMNEdge, "dc:" per Bounds, "di:" per waypoint
-- startEvent/endEvent: width="36" height="36"
-- userTask/task: width="100" height="80"  
-- exclusiveGateway: width="50" height="50" isMarkerVisible="true"
-- Posizione: x=150 primo elemento, incrementa x di 180px. Flusso principale y=200, rami alternativi y=360
-- Waypoint: usa centro-destra di source e centro-sinistra di target
-- Non usare caratteri speciali XML nei name: no &, no <, no >, no "
-- Chiudi SEMPRE </definitions> come ultimo tag
-
-ESEMPIO MINIMO (rispetta ESATTAMENTE questa struttura):
-<?xml version="1.0" encoding="UTF-8"?>
-<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="def1" targetNamespace="http://bpmn.io/schema/bpmn">
-  <process id="proc1" isExecutable="false">
-    <startEvent id="start1" name="Inizio"/>
-    <sequenceFlow id="sf1" sourceRef="start1" targetRef="task1"/>
-    <userTask id="task1" name="Esegui attivita"/>
-    <sequenceFlow id="sf2" sourceRef="task1" targetRef="gw1"/>
-    <exclusiveGateway id="gw1" name="Esito OK?"/>
-    <sequenceFlow id="sf3" sourceRef="gw1" targetRef="end1" name="Si"/>
-    <sequenceFlow id="sf4" sourceRef="gw1" targetRef="end2" name="No"/>
-    <endEvent id="end1" name="Completato"/>
-    <endEvent id="end2" name="Rifiutato"/>
-  </process>
-  <bpmndi:BPMNDiagram id="diag1">
-    <bpmndi:BPMNPlane id="plane1" bpmnElement="proc1">
-      <bpmndi:BPMNShape id="sh_start1" bpmnElement="start1"><dc:Bounds x="152" y="182" width="36" height="36"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="sh_task1" bpmnElement="task1"><dc:Bounds x="250" y="160" width="100" height="80"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="sh_gw1" bpmnElement="gw1" isMarkerVisible="true"><dc:Bounds x="422" y="175" width="50" height="50"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="sh_end1" bpmnElement="end1"><dc:Bounds x="554" y="182" width="36" height="36"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="sh_end2" bpmnElement="end2"><dc:Bounds x="554" y="342" width="36" height="36"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNEdge id="ed_sf1" bpmnElement="sf1"><di:waypoint x="188" y="200"/><di:waypoint x="250" y="200"/></bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="ed_sf2" bpmnElement="sf2"><di:waypoint x="350" y="200"/><di:waypoint x="422" y="200"/></bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="ed_sf3" bpmnElement="sf3"><di:waypoint x="472" y="200"/><di:waypoint x="554" y="200"/></bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="ed_sf4" bpmnElement="sf4"><di:waypoint x="447" y="225"/><di:waypoint x="447" y="360"/><di:waypoint x="554" y="360"/></bpmndi:BPMNEdge>
-    </bpmndi:BPMNPlane>
-  </bpmndi:BPMNDiagram>
-</definitions>`;
+REGOLE XML (critiche):
+IDs: ogni id nel <process> e in <collaboration>/<participant> deve corrispondere ESATTAMENTE al bpmnElement= nel BPMNDiagram (case-sensitive)
+FLOW: sourceRef/targetRef devono puntare a id esistenti
+NS: bpmndi:→BPMNDiagram/Plane/Shape/Edge | dc:→Bounds | di:→waypoint
+POOL: se usi collaboration, metti partecipante/processo FUORI da <process>, raccoglili in <collaboration>
+SIZES: startEvent/endEvent=36x36 | task/userTask=100x80 | exclusiveGateway=50x50 isMarkerVisible="true"
+LAYOUT: x=150 inizio, +180px per elemento. y=200 flusso principale, y=360 rami alternativi
+WAYPOINTS: centro-destra source → centro-sinistra target
+CHARS: nei name vietati: & < > "
+CHIUDI: </definitions> deve essere sempre l'ultimo tag`;
 
   try {
     const data = await callApi(key, systemPrompt,
@@ -446,23 +415,17 @@ async function validateXml(xml) {
   const parseErr = doc.querySelector('parsererror');
   if (parseErr) throw new Error('XML malformato: ' + parseErr.textContent.slice(0, 120));
 
-  // Raccogli tutti gli id definiti nel <process>
-  const ns = 'http://www.omg.org/spec/BPMN/20100524/MODEL';
-  const processEl = doc.getElementsByTagNameNS(ns, 'process')[0]
-                 || doc.querySelector('process');
-  if (!processEl) throw new Error('Elemento <process> mancante nell\'XML.');
-
+  // Raccogli TUTTI gli id definiti nell'intero documento
+  // (process, collaboration, participant, lane, pool ecc.)
   const definedIds = new Set();
-  for (const el of processEl.querySelectorAll('[id]')) {
+  for (const el of doc.querySelectorAll('[id]')) {
     definedIds.add(el.getAttribute('id'));
   }
-  // anche id del process stesso
-  if (processEl.getAttribute('id')) definedIds.add(processEl.getAttribute('id'));
 
   const errors = [];
 
   // Verifica sourceRef / targetRef nei sequenceFlow
-  for (const sf of processEl.querySelectorAll('sequenceFlow, [*|sequenceFlow]')) {
+  for (const sf of doc.querySelectorAll('sequenceFlow')) {
     const id  = sf.getAttribute('id') || '?';
     const src = sf.getAttribute('sourceRef');
     const tgt = sf.getAttribute('targetRef');
@@ -471,18 +434,15 @@ async function validateXml(xml) {
   }
 
   // Verifica bpmnElement nelle BPMNShape
-  const diNs = 'http://www.omg.org/spec/BPMN/20100524/DI';
-  const shapes = doc.querySelectorAll('BPMNShape');
-  for (const sh of shapes) {
+  for (const sh of doc.querySelectorAll('BPMNShape')) {
     const ref = sh.getAttribute('bpmnElement');
-    if (ref && !definedIds.has(ref)) errors.push(`BPMNShape bpmnElement="${ref}" non trovato nel process`);
+    if (ref && !definedIds.has(ref)) errors.push(`BPMNShape bpmnElement="${ref}" non trovato nel documento`);
   }
 
   // Verifica bpmnElement nelle BPMNEdge
-  const edges = doc.querySelectorAll('BPMNEdge');
-  for (const ed of edges) {
+  for (const ed of doc.querySelectorAll('BPMNEdge')) {
     const ref = ed.getAttribute('bpmnElement');
-    if (ref && !definedIds.has(ref)) errors.push(`BPMNEdge bpmnElement="${ref}" non trovato nel process`);
+    if (ref && !definedIds.has(ref)) errors.push(`BPMNEdge bpmnElement="${ref}" non trovato nel documento`);
   }
 
   if (errors.length > 0) {
