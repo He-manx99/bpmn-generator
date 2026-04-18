@@ -335,7 +335,7 @@ SIZES: startEvent/endEvent=36x36 | task/userTask=100x80 | exclusiveGateway=50x50
 LAYOUT: x=150 inizio, +180px per elemento. y=200 flusso principale, y=360 rami alternativi
 WAYPOINTS: centro-destra source → centro-sinistra target
 CHARS: nei name vietati: & < > "
-CHIUDI: </definitions> deve essere sempre l'ultimo tag`;
+NAMING: prefissa ogni elemento con il suo codice: task→"T1 - Nome", gateway→"GW1 - Nome", startEvent→"START - Nome", endEvent→"END1 - Nome", "END2 - Nome" ecc.
 
   try {
     const data = await callApi(key, systemPrompt,
