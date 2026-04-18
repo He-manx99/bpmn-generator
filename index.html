@@ -292,7 +292,7 @@ function getActiveRules() {
     .join('\n');
 }
 
-// ── GENERATE (2-phase) ────────────────────────────────────────────────────
+// ── GENERATE ──────────────────────────────────────────────────────────────
 async function generate() {
   const prompt = document.getElementById('prompt-input').value.trim();
   if (!prompt) { setStatus('Inserisci una descrizione del processo.', 'err'); return; }
@@ -300,108 +300,93 @@ async function generate() {
   if (!key) { showApiModal(); return; }
 
   document.getElementById('gen-btn').disabled = true;
+  setStatus('Generazione in corso...', '');
 
-  try {
-    // ── FASE 1: genera solo la logica <process> ───────────────────────────
-    setStatus('Fase 1/2 — Generazione logica processo...', '');
+  const rules = getActiveRules();
 
-    const rules = getActiveRules();
-    const sys1 = `Sei un esperto BPMN 2.0. Rispondi SOLO con XML grezzo, zero testo, zero markdown.
+  const systemPrompt = `Sei un esperto BPMN 2.0. Generi SEMPRE XML BPMN 2.0 completo e valido.
+Rispondi SOLO con l'XML grezzo. Niente testo prima o dopo. Niente markdown. Niente backtick.
 
-REGOLE BPMN da rispettare:
-${rules}
+STRUTTURA OBBLIGATORIA - copia esattamente questa struttura:
 
-ISTRUZIONI:
-- Genera SOLO il blocco <process>...</process>, niente altro
-- Usa id semplici senza spazi: start1, task1, task2, gw1, end1 ecc.
-- NON includere <?xml>, <definitions> o sezioni BPMNDiagram
-- Ogni sequenceFlow deve avere sourceRef e targetRef validi
-- Nomi elementi: solo lettere, spazi, nessun carattere speciale XML (&, <, >, ", ')
-- CHIUDI tutti i tag aperti`;
-
-    const d1 = await callApi(key, sys1, `Processo da modellare: ${prompt}`, 3000);
-    if (d1.error) throw new Error(d1.error.message);
-    updateTokens(d1.usage);
-
-    let processPart = d1.content[0].text.trim().replace(/```xml|```/gi, '').trim();
-    // estrai solo il blocco <process>
-    const pStart = processPart.indexOf('<process');
-    const pEnd = processPart.lastIndexOf('</process>');
-    if (pStart === -1 || pEnd === -1) throw new Error('Fase 1 fallita: blocco <process> non trovato');
-    processPart = processPart.slice(pStart, pEnd + '</process>'.length);
-
-    // raccoglie tutti gli id dal processo per la fase 2
-    const ids = [...processPart.matchAll(/\bid="([^"]+)"/g)].map(m => m[1]);
-
-    // ── FASE 2: genera solo il layout BPMNDiagram ────────────────────────
-    setStatus('Fase 2/2 — Generazione layout grafico...', '');
-
-    const sys2 = `Sei un esperto di layout BPMN. Rispondi SOLO con XML grezzo, zero testo, zero markdown.
-
-ISTRUZIONI LAYOUT:
-- Genera SOLO il blocco <bpmndi:BPMNDiagram>...</bpmndi:BPMNDiagram>, niente altro
-- Usa id="diagram1" e bpmnElement="process1" sul BPMNDiagram
-- Usa id="plane1" e bpmnElement="process1" sul BPMNPlane
-- Per OGNI elemento nel processo crea il suo BPMNShape o BPMNEdge corrispondente
-- startEvent/endEvent: width="36" height="36"
-- userTask/task/serviceTask: width="100" height="80"
-- exclusiveGateway/parallelGateway: width="50" height="50"
-- Posiziona da sinistra a destra: x iniziale 150, incremento 180px per ogni colonna
-- y centrale 180 per il flusso principale, rami alternativi a y=320
-- BPMNEdge: usa waypoint con coordinate che collegano centro-destra del source a centro-sinistra del target
-- CHIUDI tutti i tag aperti con </bpmndi:BPMNDiagram>`;
-
-    const d2 = await callApi(key, sys2,
-      `Genera il layout BPMNDiagram per questo blocco process (id processo = "process1"):\n\n${processPart}\n\nID elementi presenti: ${ids.join(', ')}`,
-      4000);
-    if (d2.error) throw new Error(d2.error.message);
-    updateTokens(d2.usage);
-
-    let diagramPart = d2.content[0].text.trim().replace(/```xml|```/gi, '').trim();
-    const dStart = diagramPart.indexOf('<bpmndi:BPMNDiagram');
-    const dEnd = diagramPart.lastIndexOf('</bpmndi:BPMNDiagram>');
-    if (dStart === -1 || dEnd === -1) throw new Error('Fase 2 fallita: blocco BPMNDiagram non trovato');
-    diagramPart = diagramPart.slice(dStart, dEnd + '</bpmndi:BPMNDiagram>'.length);
-
-    // ── ASSEMBLAGGIO XML COMPLETO ─────────────────────────────────────────
-    // forza id="process1" sul processo per coerenza con il diagram
-    const processFixed = processPart.replace(/(<process\s[^>]*\bid=")[^"]*(")/,  '$1process1$2')
-                                    .replace(/<process(?![^>]*\bid=)/, '<process id="process1"');
-
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
              xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
              xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
              xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
-             id="definitions1"
-             targetNamespace="http://bpmn.io/schema/bpmn">
-  ${processFixed}
-  ${diagramPart}
-</definitions>`;
+             id="definitions1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <process id="process1" isExecutable="false">
+    <!-- elementi processo -->
+  </process>
+  <bpmndi:BPMNDiagram id="diagram1">
+    <bpmndi:BPMNPlane id="plane1" bpmnElement="process1">
+      <!-- shapes e edges -->
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</definitions>
 
-    // ── RENDER ────────────────────────────────────────────────────────────
+REGOLE BPMN:
+${rules}
+
+REGOLE XML CRITICHE:
+- USA SEMPRE e SOLO il namespace prefix "bpmndi:" per BPMNDiagram, BPMNPlane, BPMNShape, BPMNEdge
+- USA SEMPRE e SOLO il namespace prefix "dc:" per Bounds
+- USA SEMPRE e SOLO il namespace prefix "di:" per waypoint
+- Ogni BPMNShape deve avere bpmnElement= con l'id dell'elemento corrispondente
+- Ogni BPMNEdge deve avere bpmnElement= con l'id del sequenceFlow corrispondente
+- startEvent/endEvent: width="36" height="36"
+- userTask/task: width="100" height="80"
+- exclusiveGateway: width="50" height="50", aggiungi isMarkerVisible="true"
+- Posizione: x=150 per il primo elemento, incrementa di 180px, y=200 per flusso principale
+- Rami alternativi (gateway No): y=340
+- Waypoint: collega centro-destra source con centro-sinistra target
+- Chiudi SEMPRE </definitions> come ultimo tag
+- Non usare caratteri speciali XML nei name: no &, no <, no >, no "`;
+
+  try {
+    const data = await callApi(key, systemPrompt,
+      `Genera il BPMN 2.0 XML completo per questo processo:\n${prompt}`, 6000);
+
+    if (data.error) throw new Error(data.error.message);
+    updateTokens(data.usage);
+
+    let xml = data.content[0].text.trim();
+    // pulizia robusta
+    xml = xml.replace(/```xml\s*/gi, '').replace(/```\s*/g, '').trim();
+    const startIdx = xml.indexOf('<?xml') !== -1 ? xml.indexOf('<?xml') : xml.indexOf('<definitions');
+    if (startIdx > 0) xml = xml.slice(startIdx);
+    const endIdx = xml.lastIndexOf('</definitions>');
+    if (endIdx !== -1) xml = xml.slice(0, endIdx + '</definitions>'.length);
+
+    // validazione minima
+    if (!xml.includes('<definitions') || !xml.includes('</definitions>'))
+      throw new Error('XML incompleto ricevuto. Riprova.');
+    if (!xml.includes('bpmndi:BPMNDiagram'))
+      throw new Error('Sezione layout mancante. Riprova.');
+
+    // render con fallback automatico
     try {
       await tryRender(xml);
     } catch(renderErr) {
-      setStatus('Layout con errori, correggo automaticamente...', '');
-      const fixSys = `Sei un esperto BPMN 2.0. Rispondi SOLO con l'XML corretto completo, zero testo, zero markdown.`;
-      const fixData = await callApi(key, fixSys,
-        `Questo XML BPMN ha un errore: "${renderErr.message}"\nCorreggi e restituisci l'intero XML valido:\n\n${xml}`, 8000);
+      setStatus('Correggo errori automaticamente...', '');
+      const fixData = await callApi(key,
+        `Sei un esperto BPMN 2.0. Correggi l'XML e restituisci SOLO l'XML valido completo, zero testo.`,
+        `Errore: "${renderErr.message}"\n\nXML da correggere:\n${xml}`, 6000);
       updateTokens(fixData.usage);
-      let fixedXml = fixData.content[0].text.trim().replace(/```xml|```/gi, '').trim();
-      const fx = fixedXml.indexOf('<?xml');
-      const fd = fixedXml.indexOf('<definitions');
-      fixedXml = fixedXml.slice(fx !== -1 ? fx : fd);
-      const fe = fixedXml.lastIndexOf('</definitions>');
-      if (fe !== -1) fixedXml = fixedXml.slice(0, fe + '</definitions>'.length);
-      await tryRender(fixedXml);
-      currentXml = fixedXml;
+      let fixed = fixData.content[0].text.trim()
+        .replace(/```xml\s*/gi, '').replace(/```\s*/g, '').trim();
+      const fi = fixed.indexOf('<?xml') !== -1 ? fixed.indexOf('<?xml') : fixed.indexOf('<definitions');
+      if (fi > 0) fixed = fixed.slice(fi);
+      const fe = fixed.lastIndexOf('</definitions>');
+      if (fe !== -1) fixed = fixed.slice(0, fe + '</definitions>'.length);
+      await tryRender(fixed);
+      xml = fixed;
     }
 
-    currentXml = currentXml || xml;
+    currentXml = xml;
     currentName = prompt.slice(0, 40) + (prompt.length > 40 ? '...' : '');
     document.getElementById('current-name').textContent = currentName;
-    saveToHistory(prompt, currentXml);
+    saveToHistory(prompt, xml);
     setStatus('✓ Diagramma generato', 'ok');
 
   } catch(e) {
@@ -411,7 +396,7 @@ ISTRUZIONI LAYOUT:
   }
 }
 
-async function callApi(key, system, userMsg, maxTokens = 3000) {
+async function callApi(key, system, userMsg, maxTokens = 4000) {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
