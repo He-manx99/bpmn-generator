@@ -70,6 +70,12 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); font
 #gen-btn { width: 100%; padding: 10px; background: var(--accent-dim); border: 1px solid var(--accent); color: var(--accent); font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; border-radius: var(--radius); cursor: pointer; transition: all 0.15s; }
 #gen-btn:hover:not(:disabled) { background: var(--accent); color: var(--bg); }
 #gen-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+#docx-btn { padding: 10px 12px; background: var(--bg3); border: 1px solid var(--border2); color: var(--text2); font-family: var(--mono); font-size: 12px; border-radius: var(--radius); cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+#docx-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+#docx-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+#docx-status { font-size: 11px; font-family: var(--mono); color: var(--text3); min-height: 14px; line-height: 1.5; }
+#docx-status.ok { color: var(--accent); }
+#docx-status.err { color: var(--red); }
 #gen-status { font-size: 11px; color: var(--text3); font-family: var(--mono); line-height: 1.5; min-height: 16px; }
 #gen-status.err { color: var(--red); }
 #gen-status.ok { color: var(--accent); }
@@ -167,8 +173,13 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); font
         <div id="prompt-label">// DESCRIVI IL PROCESSO</div>
         <textarea id="prompt-input" placeholder="es. Processo di approvazione acquisti: il dipendente invia una richiesta, il manager verifica il budget, se approvato viene emesso l'ordine, altrimenti la richiesta viene rifiutata con motivazione."></textarea>
       </div>
-      <button id="gen-btn" onclick="generate()">▶ GENERA BPMN</button>
+      <div style="display:flex;gap:8px;">
+        <button id="gen-btn" onclick="generate()" style="flex:1;">▶ GENERA BPMN</button>
+        <button id="docx-btn" onclick="document.getElementById('docx-input').click()" title="Carica .docx: il testo viene compresso automaticamente nel campo descrizione">⬆ .DOCX</button>
+      </div>
+      <input type="file" id="docx-input" accept=".docx" style="display:none" onchange="loadDocx(this)">
       <div id="gen-status"></div>
+      <div id="docx-status"></div>
     </div>
 
     <!-- RULES -->
@@ -427,6 +438,93 @@ function updateTokens(usage) {
   document.getElementById('tk-in').textContent = sessionTokens.input.toLocaleString('it-IT');
   document.getElementById('tk-out').textContent = sessionTokens.output.toLocaleString('it-IT');
   document.getElementById('tk-tot').textContent = (sessionTokens.input + sessionTokens.output).toLocaleString('it-IT');
+}
+
+// ── DOCX LOADER ───────────────────────────────────────────────────────────
+async function loadDocx(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const key = localStorage.getItem('anthropic_key');
+  if (!key) { showApiModal(); return; }
+
+  setDocxStatus('Lettura documento...', '');
+  document.getElementById('docx-btn').disabled = true;
+  document.getElementById('gen-btn').disabled = true;
+
+  try {
+    // read docx with mammoth
+    const arrayBuffer = await file.arrayBuffer();
+    const mammoth = await loadMammoth();
+    const result = await mammoth.extractRawText({ arrayBuffer });
+    const rawText = result.value.trim();
+    if (!rawText) throw new Error('Documento vuoto o non leggibile');
+
+    setDocxStatus('Compressione in corso...', '');
+
+    const compressPrompt = `Sei un esperto di analisi processi e notazione BPMN 2.0. Leggi il documento e trasformalo in un formato compatto e strutturato, ottimizzato per un generatore BPMN automatico. Usa il minor numero di token possibile con la massima precisione sul flusso.
+
+Restituisci SOLO il testo compatto, nessuna spiegazione, nessun commento, nessun markdown.
+
+Formato da usare:
+POOL:[nome processo]
+LANES:[lane1|lane2|lane3]
+START:[evento avvio]
+T[n]:[nome task][Lane]
+GW[n]:[domanda decisionale]
+  SI->[id]
+  NO->[id]
+E[n]:[nome evento errore/intermedio]
+END[n]:[nome evento chiusura con esito]
+FLOW:[id]->[id]->[id]
+
+REGOLE:
+- Id univoci: T1,T2,GW1,GW2,E1,END1 ecc.
+- Task: lane tra parentesi quadre
+- Gateway: sempre con tutte le uscite etichettate
+- FLOW: sequenza principale da START a END
+- Mantieni nomi tecnici originali (SAP, codici, sigle)
+- Ignora note, tabelle di supporto, punti da chiarire, intestazioni
+
+DOCUMENTO:
+${rawText.slice(0, 6000)}`;
+
+    const data = await callApi(key,
+      'Sei un esperto BPMN. Restituisci SOLO il testo compatto richiesto, zero altro.',
+      compressPrompt, 2000);
+
+    if (data.error) throw new Error(data.error.message);
+    updateTokens(data.usage);
+
+    const compressed = data.content[0].text.trim();
+    document.getElementById('prompt-input').value = compressed;
+    setDocxStatus('✓ Documento compresso e inserito — premi Genera BPMN', 'ok');
+
+  } catch(e) {
+    setDocxStatus('Errore: ' + e.message, 'err');
+  } finally {
+    document.getElementById('docx-btn').disabled = false;
+    document.getElementById('gen-btn').disabled = false;
+    input.value = '';
+  }
+}
+
+function setDocxStatus(msg, type) {
+  const el = document.getElementById('docx-status');
+  el.textContent = msg;
+  el.className = type;
+}
+
+let _mammoth = null;
+async function loadMammoth() {
+  if (_mammoth) return _mammoth;
+  await new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js';
+    s.onload = res; s.onerror = rej;
+    document.head.appendChild(s);
+  });
+  _mammoth = window.mammoth;
+  return _mammoth;
 }
 
 function setStatus(msg, type) {
