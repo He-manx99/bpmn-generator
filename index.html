@@ -11,20 +11,20 @@
 <link rel="stylesheet" href="https://unpkg.com/bpmn-js@17.11.1/dist/assets/bpmn-font/css/bpmn.css">
 <style>
 :root {
-  --bg: #0e0e0f;
-  --bg2: #161618;
-  --bg3: #1e1e21;
-  --border: #2a2a2e;
-  --border2: #3a3a40;
-  --text: #e8e8ea;
-  --text2: #8888a0;
-  --text3: #555568;
-  --accent: #6ee7b7;
-  --accent2: #34d399;
-  --accent-dim: #1a3d30;
-  --red: #f87171;
-  --red-dim: #3d1a1a;
-  --amber: #fbbf24;
+  --bg: #f5f5f7;
+  --bg2: #ffffff;
+  --bg3: #ebebed;
+  --border: #d0d0d8;
+  --border2: #b0b0bc;
+  --text: #1a1a2e;
+  --text2: #444460;
+  --text3: #888899;
+  --accent: #0a7c59;
+  --accent2: #0d9e70;
+  --accent-dim: #d0f0e4;
+  --red: #c0392b;
+  --red-dim: #fde8e6;
+  --amber: #b07d00;
   --font: 'IBM Plex Sans', sans-serif;
   --mono: 'IBM Plex Mono', monospace;
   --radius: 6px;
@@ -126,9 +126,33 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); font
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+/* SWIMLANE EXPAND MODAL */
+#sl-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 200; align-items: center; justify-content: center; }
+#sl-modal-overlay.show { display: flex; }
+#sl-modal { background: var(--bg2); border: 1px solid var(--border2); border-radius: 10px; padding: 24px; width: 90vw; max-width: 900px; max-height: 85vh; display: flex; flex-direction: column; gap: 12px; }
+#sl-modal-header { display: flex; align-items: center; justify-content: space-between; }
+#sl-modal-header h2 { font-family: var(--mono); font-size: 13px; color: var(--accent); letter-spacing: 0.05em; }
+#sl-modal-close { background: none; border: 1px solid var(--border); color: var(--text2); font-family: var(--mono); font-size: 12px; padding: 4px 12px; border-radius: var(--radius); cursor: pointer; }
+#sl-modal-close:hover { border-color: var(--red); color: var(--red); }
+#sl-modal-body { flex: 1; overflow-y: auto; }
+#sl-modal-textarea { width: 100%; min-height: 400px; background: var(--bg3); border: 1px solid var(--border); color: var(--text); font-family: var(--mono); font-size: 13px; padding: 12px; border-radius: var(--radius); resize: none; line-height: 1.7; }
 </style>
 </head>
 <body>
+
+<!-- SWIMLANE EXPAND MODAL -->
+<div id="sl-modal-overlay" onclick="if(event.target===this)closeSlModal()">
+  <div id="sl-modal">
+    <div id="sl-modal-header">
+      <h2>// SEZIONE 2 — MAPPA SWIM LANE</h2>
+      <button id="sl-modal-close" onclick="closeSlModal()">✕ CHIUDI</button>
+    </div>
+    <div id="sl-modal-body">
+      <textarea id="sl-modal-textarea" readonly></textarea>
+    </div>
+  </div>
+</div>
 
 <!-- API KEY MODAL -->
 <div id="modal-overlay">
@@ -193,7 +217,10 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); font
         <div>
           <div style="font-size:10px;font-family:var(--mono);color:var(--text3);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:4px;">// SEZIONE 2 — MAPPA SWIM LANE</div>
           <textarea id="prepare-out2" readonly style="width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--amber);font-family:var(--mono);font-size:11px;padding:8px;border-radius:var(--radius);resize:none;height:150px;line-height:1.5;"></textarea>
-          <button onclick="copySwimLane()" style="width:100%;margin-top:4px;padding:8px;background:none;border:1px solid var(--border2);color:var(--text2);font-family:var(--mono);font-size:11px;letter-spacing:0.06em;border-radius:var(--radius);cursor:pointer;transition:all 0.15s;">⎘ COPIA MAPPA BIZAGI</button>
+          <div style="display:flex;gap:6px;margin-top:4px;">
+            <button onclick="copySwimLane()" style="flex:1;padding:8px;background:none;border:1px solid var(--border2);color:var(--text2);font-family:var(--mono);font-size:11px;letter-spacing:0.06em;border-radius:var(--radius);cursor:pointer;transition:all 0.15s;">⎘ COPIA</button>
+            <button onclick="openSlModal()" style="flex:1;padding:8px;background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent);font-family:var(--mono);font-size:11px;letter-spacing:0.06em;border-radius:var(--radius);cursor:pointer;transition:all 0.15s;">⤢ ESPANDI</button>
+          </div>
         </div>
       </div>
     </div>
@@ -211,7 +238,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); font
       <input type="file" id="docx-input" accept=".docx" style="display:none" onchange="loadDocx(this)">
       <div id="gen-status"></div>
       <div id="docx-status"></div>
-      <button id="clear-hist-btn2" onclick="clearHistory()">✕ Svuota storico</button>
+      <button id="clear-hist-btn2" onclick="clearAll()" style="width:100%;margin-top:4px;padding:7px;background:none;border:1px solid var(--red-dim);color:var(--red);font-family:var(--mono);font-size:11px;letter-spacing:0.06em;border-radius:var(--radius);cursor:pointer;transition:all 0.15s;">✕ Pulisci tutto</button>
     </div>
 
     <!-- RULES -->
@@ -813,6 +840,41 @@ function copySwimLane() {
     btn.textContent = '✓ COPIATO';
     setTimeout(() => btn.textContent = orig, 1500);
   });
+}
+
+function openSlModal() {
+  const s2 = document.getElementById('prepare-out2').value;
+  if (!s2) return;
+  document.getElementById('sl-modal-textarea').value = s2;
+  document.getElementById('sl-modal-overlay').classList.add('show');
+}
+
+function closeSlModal() {
+  document.getElementById('sl-modal-overlay').classList.remove('show');
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeSlModal();
+});
+
+async function clearAll() {
+  if (!confirm('Pulire tutto? Verranno cancellati: testo, diagramma e storico.')) return;
+  // svuota textarea
+  document.getElementById('prompt-input').value = '';
+  document.getElementById('prepare-input').value = '';
+  document.getElementById('prepare-out1').value = '';
+  document.getElementById('prepare-out2').value = '';
+  document.getElementById('prepare-results').style.display = 'none';
+  // reset canvas
+  currentXml = '';
+  currentName = '';
+  document.getElementById('current-name').textContent = 'nessun diagramma';
+  try { await modeler.importXML('<?xml version="1.0" encoding="UTF-8"?><definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" id="empty" targetNamespace="http://bpmn.io/schema/bpmn"><process id="proc_empty" isExecutable="false"/><bpmndi:BPMNDiagram id="diag_empty"><bpmndi:BPMNPlane id="plane_empty" bpmnElement="proc_empty"/></bpmndi:BPMNDiagram></definitions>'); } catch(e) {}
+  // svuota storico
+  localStorage.removeItem('bpmn_history');
+  renderHistory();
+  setStatus('✓ Tutto pulito', 'ok');
+  setPrepareStatus('', '');
 }
 
 
