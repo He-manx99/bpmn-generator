@@ -410,12 +410,11 @@ REGOLE XML CRITICHE:
 - Chiudi SEMPRE </definitions> come ultimo tag
 
 SWIM LANE:
-- Se l'input contiene righe LANES:[...] e ogni elemento ha [Lane_X] alla fine, DEVI generare swim lane
-- Usa un <participant> con <process> annidato dentro un <collaboration>
-- Ogni lane è un <lane> dentro <laneSet> dentro il <process>
-- Ogni <lane> contiene <flowNodeRef> con gli id degli elementi che appartengono a quella lane
-- Le BPMNShape delle lane vanno nel BPMNDiagram con isHorizontal="true"
-- La prima lane parte a y=60, height=160 per lane. La larghezza del pool copre tutto il processo
+- Se l'input contiene LANES:[...] e ogni elemento ha [Lane_X], DEVI generare swim lane
+- Struttura OBBLIGATORIA: <collaboration id="collab1"> contiene <participant id="pool1" processRef="proc1"/>. Il <process id="proc1"> e' separato, allo stesso livello di <collaboration>, NON annidato dentro di essa
+- Dentro <process>: <laneSet> contiene un <lane> per ogni attore, ogni <lane> lista i <flowNodeRef> dei suoi elementi
+- Nel BPMNDiagram: bpmnElement="collab1" nel BPMNPlane, poi BPMNShape per pool e lane con isHorizontal="true"
+- Altezza pool = numero lane x 160. Prima lane y=40, ogni lane successiva y += 160
 - Se l'input NON contiene LANES, genera processo flat senza swim lane
 
 ESEMPIO CON 2 LANE (rispetta ESATTAMENTE questa struttura):
@@ -578,21 +577,20 @@ async function validateXml(xml) {
                  || doc.querySelector('process');
   if (!processEl) throw new Error('Elemento <process> mancante nell\'XML.');
 
-  // Raccogli id da process, collaboration, participant, lane
+  // Se c'è una collaboration (swim lane), salta validazione id — bpmn-js la fa da solo
+  const hasCollaboration = !!(doc.getElementsByTagNameNS(ns, 'collaboration')[0]
+                            || doc.querySelector('collaboration'));
+  if (hasCollaboration) return;
+
+  // Processo flat: raccogli id e verifica riferimenti
   const definedIds = new Set();
   for (const el of processEl.querySelectorAll('[id]')) {
     definedIds.add(el.getAttribute('id'));
   }
   if (processEl.getAttribute('id')) definedIds.add(processEl.getAttribute('id'));
 
-  // aggiungi id da collaboration e participant
-  for (const el of doc.querySelectorAll('[id]')) {
-    definedIds.add(el.getAttribute('id'));
-  }
-
   const errors = [];
 
-  // Verifica sourceRef / targetRef nei sequenceFlow
   for (const sf of processEl.querySelectorAll('sequenceFlow, [*|sequenceFlow]')) {
     const id  = sf.getAttribute('id') || '?';
     const src = sf.getAttribute('sourceRef');
@@ -601,14 +599,13 @@ async function validateXml(xml) {
     if (tgt && !definedIds.has(tgt)) errors.push(`sequenceFlow "${id}": targetRef="${tgt}" non trovato`);
   }
 
-  // Verifica bpmnElement nelle BPMNShape e BPMNEdge
   for (const sh of doc.querySelectorAll('BPMNShape')) {
     const ref = sh.getAttribute('bpmnElement');
-    if (ref && !definedIds.has(ref)) errors.push(`BPMNShape bpmnElement="${ref}" non trovato`);
+    if (ref && !definedIds.has(ref)) errors.push(`BPMNShape bpmnElement="${ref}" non trovato nel process`);
   }
   for (const ed of doc.querySelectorAll('BPMNEdge')) {
     const ref = ed.getAttribute('bpmnElement');
-    if (ref && !definedIds.has(ref)) errors.push(`BPMNEdge bpmnElement="${ref}" non trovato`);
+    if (ref && !definedIds.has(ref)) errors.push(`BPMNEdge bpmnElement="${ref}" non trovato nel process`);
   }
 
   if (errors.length > 0) {
