@@ -772,16 +772,17 @@ Restituisci ESATTAMENTE questo formato, senza nulla prima o dopo:
 
 ===SEZIONE1===
 POOL:[nome processo]
-START:[nome evento avvio]
-T1:[nome task]
-T2:[nome task]
-GW1:[domanda decisionale]
+LANES:[Lane_Nome1|Lane_Nome2|Lane_Nome3]
+START:[nome evento avvio] [Lane_NomeLane]
+T1:[nome task] [Lane_NomeLane]
+T2:[nome task] [Lane_NomeLane]
+GW1:[domanda decisionale] [Lane_NomeLane]
   SI->T3
   NO->T4
-T3:[nome task]
-T4:[nome task]
-END1:[esito positivo]
-END2:[esito negativo]
+T3:[nome task] [Lane_NomeLane]
+T4:[nome task] [Lane_NomeLane]
+END1:[esito positivo] [Lane_NomeLane]
+END2:[esito negativo] [Lane_NomeLane]
 FLOW:START->T1->T2->GW1->...->END1
 
 ===SEZIONE2===
@@ -798,7 +799,8 @@ REGOLE SEZIONE 1:
 - Nomi task in forma Verbo+Oggetto (es. "Verifica documento")
 - Ogni gateway ha TUTTE le uscite etichettate
 - NO riferimenti agli attori nei nomi dei task
-- NO pool, NO lane, NO swim lane
+- Ogni elemento ha la sua lane tra parentesi quadre: [Lane_NomeSenzaSpazi]
+- Prima riga dopo POOL: LANES con tutte le lane uniche nell'ordine suggerito
 - Mantieni sigle e nomi tecnici originali (SAP, ERP, codici)
 - Passaggi logicamente necessari ma non esplicitati: aggiungili con [*]
 
