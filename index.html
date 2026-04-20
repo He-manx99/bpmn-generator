@@ -166,9 +166,36 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); font
   <!-- SIDEBAR -->
   <div id="sidebar">
     <div id="sidebar-tabs">
+      <div class="stab" onclick="switchTab('prepare')">PREPARA</div>
       <div class="stab active" onclick="switchTab('generate')">GENERA</div>
       <div class="stab" onclick="switchTab('rules')">REGOLE</div>
       <div class="stab" onclick="switchTab('history')">STORICO</div>
+    </div>
+
+    <!-- PREPARA -->
+    <div class="stab-panel" id="tab-prepare">
+      <div>
+        <div id="prompt-label">// INCOLLA TRASCRIZIONE</div>
+        <textarea id="prepare-input" style="width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);font-family:var(--font);font-size:13px;padding:10px;border-radius:var(--radius);resize:none;height:110px;line-height:1.5;" placeholder="Incolla qui la trascrizione grezza della riunione o qualsiasi testo descrittivo del processo..."></textarea>
+      </div>
+      <button id="prepare-btn" onclick="prepareText()" style="width:100%;padding:10px;background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent);font-family:var(--mono);font-size:12px;letter-spacing:0.08em;border-radius:var(--radius);cursor:pointer;transition:all 0.15s;">▶ ELABORA</button>
+      <div id="prepare-status" style="font-size:11px;color:var(--text3);font-family:var(--mono);min-height:16px;"></div>
+
+      <div id="prepare-results" style="display:none;flex-direction:column;gap:10px;">
+        <!-- SEZIONE 1 -->
+        <div>
+          <div style="font-size:10px;font-family:var(--mono);color:var(--text3);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:4px;">// SEZIONE 1 — INPUT BPMN</div>
+          <textarea id="prepare-out1" readonly style="width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:11px;padding:8px;border-radius:var(--radius);resize:none;height:130px;line-height:1.5;"></textarea>
+          <button onclick="sendToGenerate()" style="width:100%;margin-top:4px;padding:8px;background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent);font-family:var(--mono);font-size:11px;letter-spacing:0.06em;border-radius:var(--radius);cursor:pointer;transition:all 0.15s;">→ INVIA A GENERA</button>
+        </div>
+
+        <!-- SEZIONE 2 -->
+        <div>
+          <div style="font-size:10px;font-family:var(--mono);color:var(--text3);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:4px;">// SEZIONE 2 — MAPPA SWIM LANE</div>
+          <textarea id="prepare-out2" readonly style="width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--amber);font-family:var(--mono);font-size:11px;padding:8px;border-radius:var(--radius);resize:none;height:150px;line-height:1.5;"></textarea>
+          <button onclick="copySwimLane()" style="width:100%;margin-top:4px;padding:8px;background:none;border:1px solid var(--border2);color:var(--text2);font-family:var(--mono);font-size:11px;letter-spacing:0.06em;border-radius:var(--radius);cursor:pointer;transition:all 0.15s;">⎘ COPIA MAPPA BIZAGI</button>
+        </div>
+      </div>
     </div>
 
     <!-- GENERATE -->
@@ -290,8 +317,8 @@ document.getElementById('api-key-input').addEventListener('keydown', e => {
 
 // ── TABS ───────────────────────────────────────────────────────────────────
 function switchTab(name) {
+  const panels = ['prepare','generate','rules','history'];
   document.querySelectorAll('.stab').forEach((t,i) => {
-    const panels = ['generate','rules','history'];
     t.classList.toggle('active', panels[i] === name);
   });
   document.querySelectorAll('.stab-panel').forEach(p => {
@@ -683,7 +710,112 @@ async function downloadSvg() {
   } catch(e) { setStatus('Errore export SVG', 'err'); }
 }
 
-// ── EXAMPLE ────────────────────────────────────────────────────────────────
+// ── PREPARA ────────────────────────────────────────────────────────────────
+async function prepareText() {
+  const input = document.getElementById('prepare-input').value.trim();
+  if (!input) { setPrepareStatus('Incolla una trascrizione prima di elaborare.', 'err'); return; }
+  const key = localStorage.getItem('anthropic_key');
+  if (!key) { showApiModal(); return; }
+
+  document.getElementById('prepare-btn').disabled = true;
+  document.getElementById('prepare-results').style.display = 'none';
+  setPrepareStatus('Elaborazione in corso...', '');
+
+  const systemPrompt = `Sei un analista di processi aziendali esperto in BPMN 2.0. Analizzi testi grezzi (trascrizioni, verbali, appunti) e li trasformi in un formato strutturato per un generatore BPMN automatico.
+
+Restituisci ESATTAMENTE questo formato, senza nulla prima o dopo:
+
+===SEZIONE1===
+POOL:[nome processo]
+START:[nome evento avvio]
+T1:[nome task]
+T2:[nome task]
+GW1:[domanda decisionale]
+  SI->T3
+  NO->T4
+T3:[nome task]
+T4:[nome task]
+END1:[esito positivo]
+END2:[esito negativo]
+FLOW:START->T1->T2->GW1->...->END1
+
+===SEZIONE2===
+| ID | Nome elemento | Attore | Swim Lane |
+|----|--------------|--------|-----------|
+| START | [nome] | [attore] | Lane_[Nome] |
+| T1 | [nome] | [attore] | Lane_[Nome] |
+| GW1 | [nome] | [attore] | Lane_[Nome] |
+| END1 | [nome] | — | Lane_[Nome] |
+LANE DA CREARE: Lane_Nome1, Lane_Nome2, Lane_Nome3
+
+REGOLE SEZIONE 1:
+- ID univoci progressivi: T1,T2... GW1,GW2... END1,END2...
+- Nomi task in forma Verbo+Oggetto (es. "Verifica documento")
+- Ogni gateway ha TUTTE le uscite etichettate
+- NO riferimenti agli attori nei nomi dei task
+- NO pool, NO lane, NO swim lane
+- Mantieni sigle e nomi tecnici originali (SAP, ERP, codici)
+- Passaggi logicamente necessari ma non esplicitati: aggiungili con [*]
+
+REGOLE SEZIONE 2:
+- Elenca TUTTI gli elementi della sezione 1
+- Colonna Swim Lane: formato Lane_NomeSenzaSpazi
+- Attore non specificato: [da definire]
+- Ultima riga LANE DA CREARE con tutte le lane uniche nell'ordine suggerito`;
+
+  try {
+    const data = await callApi(key, systemPrompt,
+      `Analizza questo testo e restituisci le due sezioni:\n\n${input}`, 4000);
+
+    if (data.error) throw new Error(data.error.message);
+    if (data.stop_reason === 'max_tokens')
+      throw new Error('Testo troppo lungo. Prova con una parte del documento.');
+    updateTokens(data.usage);
+
+    const raw = data.content[0].text.trim();
+    const s1match = raw.match(/===SEZIONE1===([\s\S]*?)===SEZIONE2===/);
+    const s2match = raw.match(/===SEZIONE2===([\s\S]*?)$/);
+
+    if (!s1match || !s2match) throw new Error('Formato risposta non riconosciuto. Riprova.');
+
+    document.getElementById('prepare-out1').value = s1match[1].trim();
+    document.getElementById('prepare-out2').value = s2match[1].trim();
+    document.getElementById('prepare-results').style.display = 'flex';
+    setPrepareStatus('✓ Elaborazione completata', 'ok');
+
+  } catch(e) {
+    setPrepareStatus('Errore: ' + e.message, 'err');
+  } finally {
+    document.getElementById('prepare-btn').disabled = false;
+  }
+}
+
+function setPrepareStatus(msg, type) {
+  const el = document.getElementById('prepare-status');
+  el.textContent = msg;
+  el.style.color = type === 'err' ? 'var(--red)' : type === 'ok' ? 'var(--accent)' : 'var(--text3)';
+}
+
+function sendToGenerate() {
+  const s1 = document.getElementById('prepare-out1').value;
+  if (!s1) return;
+  document.getElementById('prompt-input').value = s1;
+  switchTab('generate');
+  setStatus('✓ Testo inserito da PREPARA', 'ok');
+}
+
+function copySwimLane() {
+  const s2 = document.getElementById('prepare-out2').value;
+  if (!s2) return;
+  navigator.clipboard.writeText(s2).then(() => {
+    const btn = event.target;
+    const orig = btn.textContent;
+    btn.textContent = '✓ COPIATO';
+    setTimeout(() => btn.textContent = orig, 1500);
+  });
+}
+
+
 async function loadExample() {
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="def1" targetNamespace="http://bpmn.io/schema/bpmn">
