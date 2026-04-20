@@ -573,18 +573,22 @@ async function validateXml(xml) {
   const parseErr = doc.querySelector('parsererror');
   if (parseErr) throw new Error('XML malformato: ' + parseErr.textContent.slice(0, 120));
 
-  // Raccogli tutti gli id definiti nel <process>
   const ns = 'http://www.omg.org/spec/BPMN/20100524/MODEL';
   const processEl = doc.getElementsByTagNameNS(ns, 'process')[0]
                  || doc.querySelector('process');
   if (!processEl) throw new Error('Elemento <process> mancante nell\'XML.');
 
+  // Raccogli id da process, collaboration, participant, lane
   const definedIds = new Set();
   for (const el of processEl.querySelectorAll('[id]')) {
     definedIds.add(el.getAttribute('id'));
   }
-  // anche id del process stesso
   if (processEl.getAttribute('id')) definedIds.add(processEl.getAttribute('id'));
+
+  // aggiungi id da collaboration e participant
+  for (const el of doc.querySelectorAll('[id]')) {
+    definedIds.add(el.getAttribute('id'));
+  }
 
   const errors = [];
 
@@ -597,19 +601,14 @@ async function validateXml(xml) {
     if (tgt && !definedIds.has(tgt)) errors.push(`sequenceFlow "${id}": targetRef="${tgt}" non trovato`);
   }
 
-  // Verifica bpmnElement nelle BPMNShape
-  const diNs = 'http://www.omg.org/spec/BPMN/20100524/DI';
-  const shapes = doc.querySelectorAll('BPMNShape');
-  for (const sh of shapes) {
+  // Verifica bpmnElement nelle BPMNShape e BPMNEdge
+  for (const sh of doc.querySelectorAll('BPMNShape')) {
     const ref = sh.getAttribute('bpmnElement');
-    if (ref && !definedIds.has(ref)) errors.push(`BPMNShape bpmnElement="${ref}" non trovato nel process`);
+    if (ref && !definedIds.has(ref)) errors.push(`BPMNShape bpmnElement="${ref}" non trovato`);
   }
-
-  // Verifica bpmnElement nelle BPMNEdge
-  const edges = doc.querySelectorAll('BPMNEdge');
-  for (const ed of edges) {
+  for (const ed of doc.querySelectorAll('BPMNEdge')) {
     const ref = ed.getAttribute('bpmnElement');
-    if (ref && !definedIds.has(ref)) errors.push(`BPMNEdge bpmnElement="${ref}" non trovato nel process`);
+    if (ref && !definedIds.has(ref)) errors.push(`BPMNEdge bpmnElement="${ref}" non trovato`);
   }
 
   if (errors.length > 0) {
