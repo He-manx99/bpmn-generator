@@ -130,6 +130,8 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); font
 /* SWIMLANE EXPAND MODAL */
 #sl-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 200; align-items: center; justify-content: center; }
 #sl-modal-overlay.show { display: flex; }
+#s1-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 200; align-items: center; justify-content: center; }
+#s1-modal-overlay.show { display: flex; }
 #sl-modal { background: var(--bg2); border: 1px solid var(--border2); border-radius: 10px; padding: 24px; width: 90vw; max-width: 900px; max-height: 85vh; display: flex; flex-direction: column; gap: 12px; }
 #sl-modal-header { display: flex; align-items: center; justify-content: space-between; }
 #sl-modal-header h2 { font-family: var(--mono); font-size: 13px; color: var(--accent); letter-spacing: 0.05em; }
@@ -140,6 +142,19 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); font
 </style>
 </head>
 <body>
+
+<!-- SEZIONE 1 EXPAND MODAL -->
+<div id="s1-modal-overlay" onclick="if(event.target===this)closeS1Modal()">
+  <div id="sl-modal">
+    <div id="sl-modal-header">
+      <h2>// SEZIONE 1 — INPUT BPMN (modificabile)</h2>
+      <button id="sl-modal-close" onclick="closeS1Modal()">✕ CHIUDI</button>
+    </div>
+    <div id="sl-modal-body">
+      <textarea id="s1-modal-textarea" style="width:100%;min-height:400px;background:var(--bg3);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:13px;padding:12px;border-radius:var(--radius);resize:none;line-height:1.7;"></textarea>
+    </div>
+  </div>
+</div>
 
 <!-- SWIMLANE EXPAND MODAL -->
 <div id="sl-modal-overlay" onclick="if(event.target===this)closeSlModal()">
@@ -209,8 +224,11 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); font
         <!-- SEZIONE 1 -->
         <div>
           <div style="font-size:10px;font-family:var(--mono);color:var(--text3);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:4px;">// SEZIONE 1 — INPUT BPMN</div>
-          <textarea id="prepare-out1" readonly style="width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:11px;padding:8px;border-radius:var(--radius);resize:none;height:130px;line-height:1.5;"></textarea>
-          <button onclick="sendToGenerate()" style="width:100%;margin-top:4px;padding:8px;background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent);font-family:var(--mono);font-size:11px;letter-spacing:0.06em;border-radius:var(--radius);cursor:pointer;transition:all 0.15s;">→ INVIA A GENERA</button>
+          <textarea id="prepare-out1" style="width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:11px;padding:8px;border-radius:var(--radius);resize:none;height:130px;line-height:1.5;" placeholder="Qui apparirà la Sezione 1 — puoi modificarla prima di inviare"></textarea>
+          <div style="display:flex;gap:6px;margin-top:4px;">
+            <button onclick="sendToGenerate()" style="flex:1;padding:8px;background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent);font-family:var(--mono);font-size:11px;letter-spacing:0.06em;border-radius:var(--radius);cursor:pointer;transition:all 0.15s;">→ INVIA A GENERA</button>
+            <button onclick="openS1Modal()" style="flex:1;padding:8px;background:none;border:1px solid var(--border2);color:var(--text2);font-family:var(--mono);font-size:11px;letter-spacing:0.06em;border-radius:var(--radius);cursor:pointer;transition:all 0.15s;">⤢ ESPANDI</button>
+          </div>
         </div>
 
         <!-- SEZIONE 2 -->
@@ -853,8 +871,24 @@ function closeSlModal() {
   document.getElementById('sl-modal-overlay').classList.remove('show');
 }
 
+function openS1Modal() {
+  const s1 = document.getElementById('prepare-out1').value;
+  document.getElementById('s1-modal-textarea').value = s1;
+  document.getElementById('s1-modal-overlay').classList.add('show');
+  // focus alla fine del testo
+  const ta = document.getElementById('s1-modal-textarea');
+  setTimeout(() => { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }, 50);
+}
+
+function closeS1Modal() {
+  // salva le modifiche nella textarea originale
+  const edited = document.getElementById('s1-modal-textarea').value;
+  document.getElementById('prepare-out1').value = edited;
+  document.getElementById('s1-modal-overlay').classList.remove('show');
+}
+
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') closeSlModal();
+  if (e.key === 'Escape') { closeSlModal(); closeS1Modal(); }
 });
 
 async function clearAll() {
