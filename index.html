@@ -403,39 +403,89 @@ REGOLE XML CRITICHE:
 - Ogni sourceRef e targetRef nei sequenceFlow devono puntare a id esistenti nel <process>
 - USA SOLO prefissi: "bpmndi:" per BPMNDiagram/BPMNPlane/BPMNShape/BPMNEdge, "dc:" per Bounds, "di:" per waypoint
 - startEvent/endEvent: width="36" height="36"
-- userTask/task: width="100" height="80"  
+- userTask/task: width="100" height="80"
 - exclusiveGateway: width="50" height="50" isMarkerVisible="true"
-- Posizione: x=150 primo elemento, incrementa x di 180px. Flusso principale y=200, rami alternativi y=360
 - Waypoint: usa centro-destra di source e centro-sinistra di target
 - Non usare caratteri speciali XML nei name: no &, no <, no >, no "
 - Chiudi SEMPRE </definitions> come ultimo tag
-- NON usare pool, lane, laneSet, participant: genera SEMPRE un processo flat senza swim lane
 
-ESEMPIO MINIMO (rispetta ESATTAMENTE questa struttura):
+SWIM LANE:
+- Se l'input contiene righe LANES:[...] e ogni elemento ha [Lane_X] alla fine, DEVI generare swim lane
+- Usa un <participant> con <process> annidato dentro un <collaboration>
+- Ogni lane è un <lane> dentro <laneSet> dentro il <process>
+- Ogni <lane> contiene <flowNodeRef> con gli id degli elementi che appartengono a quella lane
+- Le BPMNShape delle lane vanno nel BPMNDiagram con isHorizontal="true"
+- La prima lane parte a y=60, height=160 per lane. La larghezza del pool copre tutto il processo
+- Se l'input NON contiene LANES, genera processo flat senza swim lane
+
+ESEMPIO CON 2 LANE (rispetta ESATTAMENTE questa struttura):
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="def1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <collaboration id="collab1">
+    <participant id="pool1" name="Processo" processRef="proc1"/>
+  </collaboration>
+  <process id="proc1" isExecutable="false">
+    <laneSet id="ls1">
+      <lane id="lane_a" name="Attore A">
+        <flowNodeRef>start1</flowNodeRef>
+        <flowNodeRef>task1</flowNodeRef>
+        <flowNodeRef>end1</flowNodeRef>
+      </lane>
+      <lane id="lane_b" name="Attore B">
+        <flowNodeRef>task2</flowNodeRef>
+        <flowNodeRef>gw1</flowNodeRef>
+        <flowNodeRef>end2</flowNodeRef>
+      </lane>
+    </laneSet>
+    <startEvent id="start1" name="Inizio"/>
+    <sequenceFlow id="sf1" sourceRef="start1" targetRef="task1"/>
+    <userTask id="task1" name="Esegui attivita A"/>
+    <sequenceFlow id="sf2" sourceRef="task1" targetRef="task2"/>
+    <userTask id="task2" name="Esegui attivita B"/>
+    <sequenceFlow id="sf3" sourceRef="task2" targetRef="gw1"/>
+    <exclusiveGateway id="gw1" name="Esito OK?"/>
+    <sequenceFlow id="sf4" sourceRef="gw1" targetRef="end1" name="Si"/>
+    <sequenceFlow id="sf5" sourceRef="gw1" targetRef="end2" name="No"/>
+    <endEvent id="end1" name="Completato"/>
+    <endEvent id="end2" name="Rifiutato"/>
+  </process>
+  <bpmndi:BPMNDiagram id="diag1">
+    <bpmndi:BPMNPlane id="plane1" bpmnElement="collab1">
+      <bpmndi:BPMNShape id="sh_pool1" bpmnElement="pool1" isHorizontal="true"><dc:Bounds x="100" y="40" width="900" height="320"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_lane_a" bpmnElement="lane_a" isHorizontal="true"><dc:Bounds x="130" y="40" width="870" height="160"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_lane_b" bpmnElement="lane_b" isHorizontal="true"><dc:Bounds x="130" y="200" width="870" height="160"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_start1" bpmnElement="start1"><dc:Bounds x="182" y="102" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_task1" bpmnElement="task1"><dc:Bounds x="280" y="80" width="100" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_task2" bpmnElement="task2"><dc:Bounds x="280" y="240" width="100" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_gw1" bpmnElement="gw1" isMarkerVisible="true"><dc:Bounds x="452" y="255" width="50" height="50"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_end1" bpmnElement="end1"><dc:Bounds x="584" y="102" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_end2" bpmnElement="end2"><dc:Bounds x="584" y="262" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="ed_sf1" bpmnElement="sf1"><di:waypoint x="218" y="120"/><di:waypoint x="280" y="120"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ed_sf2" bpmnElement="sf2"><di:waypoint x="330" y="160"/><di:waypoint x="330" y="240"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ed_sf3" bpmnElement="sf3"><di:waypoint x="380" y="280"/><di:waypoint x="452" y="280"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ed_sf4" bpmnElement="sf4"><di:waypoint x="477" y="255"/><di:waypoint x="477" y="120"/><di:waypoint x="584" y="120"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ed_sf5" bpmnElement="sf5"><di:waypoint x="502" y="280"/><di:waypoint x="584" y="280"/></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</definitions>
+
+ESEMPIO FLAT senza lane (se input non ha LANES):
 <?xml version="1.0" encoding="UTF-8"?>
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="def1" targetNamespace="http://bpmn.io/schema/bpmn">
   <process id="proc1" isExecutable="false">
     <startEvent id="start1" name="Inizio"/>
     <sequenceFlow id="sf1" sourceRef="start1" targetRef="task1"/>
     <userTask id="task1" name="Esegui attivita"/>
-    <sequenceFlow id="sf2" sourceRef="task1" targetRef="gw1"/>
-    <exclusiveGateway id="gw1" name="Esito OK?"/>
-    <sequenceFlow id="sf3" sourceRef="gw1" targetRef="end1" name="Si"/>
-    <sequenceFlow id="sf4" sourceRef="gw1" targetRef="end2" name="No"/>
+    <sequenceFlow id="sf2" sourceRef="task1" targetRef="end1"/>
     <endEvent id="end1" name="Completato"/>
-    <endEvent id="end2" name="Rifiutato"/>
   </process>
   <bpmndi:BPMNDiagram id="diag1">
     <bpmndi:BPMNPlane id="plane1" bpmnElement="proc1">
       <bpmndi:BPMNShape id="sh_start1" bpmnElement="start1"><dc:Bounds x="152" y="182" width="36" height="36"/></bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="sh_task1" bpmnElement="task1"><dc:Bounds x="250" y="160" width="100" height="80"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="sh_gw1" bpmnElement="gw1" isMarkerVisible="true"><dc:Bounds x="422" y="175" width="50" height="50"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="sh_end1" bpmnElement="end1"><dc:Bounds x="554" y="182" width="36" height="36"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="sh_end2" bpmnElement="end2"><dc:Bounds x="554" y="342" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_end1" bpmnElement="end1"><dc:Bounds x="412" y="182" width="36" height="36"/></bpmndi:BPMNShape>
       <bpmndi:BPMNEdge id="ed_sf1" bpmnElement="sf1"><di:waypoint x="188" y="200"/><di:waypoint x="250" y="200"/></bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="ed_sf2" bpmnElement="sf2"><di:waypoint x="350" y="200"/><di:waypoint x="422" y="200"/></bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="ed_sf3" bpmnElement="sf3"><di:waypoint x="472" y="200"/><di:waypoint x="554" y="200"/></bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="ed_sf4" bpmnElement="sf4"><di:waypoint x="447" y="225"/><di:waypoint x="447" y="360"/><di:waypoint x="554" y="360"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ed_sf2" bpmnElement="sf2"><di:waypoint x="350" y="200"/><di:waypoint x="412" y="200"/></bpmndi:BPMNEdge>
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>
 </definitions>
