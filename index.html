@@ -122,6 +122,16 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); font
 #modal-link { font-size: 11px; color: var(--text3); margin-top: 8px; text-align: center; }
 #modal-link a { color: var(--accent); }
 
+/* PARSER RULES MODAL */
+#parser-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 300; align-items: center; justify-content: center; }
+#parser-modal-overlay.show { display: flex; }
+#parser-modal { background: var(--bg2); border: 1px solid var(--border2); border-radius: 10px; padding: 24px; width: 90vw; max-width: 760px; max-height: 85vh; display: flex; flex-direction: column; gap: 12px; }
+#parser-modal-header { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+#parser-modal-header h2 { font-family: var(--mono); font-size: 13px; color: var(--accent); letter-spacing: 0.05em; }
+#parser-modal-actions { display: flex; gap: 8px; }
+#parser-modal-body { flex: 1; overflow-y: auto; }
+#parser-modal-textarea { width: 100%; min-height: 420px; background: var(--bg3); border: 1px solid var(--border); color: var(--text); font-family: var(--mono); font-size: 12px; padding: 12px; border-radius: var(--radius); resize: none; line-height: 1.7; }
+
 /* scrollbar */
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -169,6 +179,22 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); font
   </div>
 </div>
 
+<!-- PARSER RULES MODAL -->
+<div id="parser-modal-overlay" onclick="if(event.target===this)closeParserModal()">
+  <div id="parser-modal">
+    <div id="parser-modal-header">
+      <h2>// REGOLE PARSER — prompt da copiare su agente esterno</h2>
+      <div id="parser-modal-actions">
+        <button class="hbtn" onclick="copyParserPrompt()" id="parser-copy-btn">⎘ COPIA</button>
+        <button class="hbtn" onclick="closeParserModal()" style="border-color:var(--border2);">✕ CHIUDI</button>
+      </div>
+    </div>
+    <div id="parser-modal-body">
+      <textarea id="parser-modal-textarea" readonly></textarea>
+    </div>
+  </div>
+</div>
+
 <!-- API KEY MODAL -->
 <div id="modal-overlay">
   <div id="modal">
@@ -196,6 +222,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); font
       <span class="tk-label">tot</span> <span class="tk-total" id="tk-tot">0</span>
     </div>
     <div id="api-status" title="Stato API key"></div>
+    <button class="hbtn" onclick="openParserModal()">REGOLE PARSER</button>
     <button class="hbtn" onclick="showApiModal()">API KEY</button>
   </div>
 </div>
@@ -936,8 +963,134 @@ function closeS1Modal() {
 }
 
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closeSlModal(); closeS1Modal(); }
+  if (e.key === 'Escape') { closeSlModal(); closeS1Modal(); closeParserModal(); }
 });
+
+// ── PARSER RULES MODAL ────────────────────────────────────────────────────
+const PARSER_PROMPT = `Sei un analista di processi aziendali. Il tuo compito è convertire una descrizione di processo in un formato strutturato, rigoroso e deterministico, pronto per essere elaborato da un parser BPMN.
+
+FORMATO OUTPUT OBBLIGATORIO
+
+1. POOL E LANE
+- Se il processo coinvolge più attori, usa:
+  POOL:NomeProcesso
+  LANES:[Lane_NomeAttore1|Lane_NomeAttore2|Lane_NomeAttore3]
+- Se il processo coinvolge un solo attore, ometti POOL e LANES.
+- Se usi LANES, ogni nodo deve terminare con [Lane_NomeAttore].
+- Se non usi LANES, nessun nodo deve contenere [Lane_...].
+
+2. NODI
+- Un nodo per riga.
+- Sintassi ammessa:
+START:Nome evento inizio [Lane_X]
+T1:Verbo + Oggetto [Lane_X]
+GW1:Domanda chiusa? [Lane_X]
+  SI->T2
+  NO->T3
+GWP1:Nome fork parallelo [Lane_X]
+  ->T4
+  ->T5
+GWPJ1:Nome join parallelo [Lane_X]
+MSG1:Inviare/Ricevere + Oggetto [Lane_X]
+END1:Nome esito [Lane_X]
+
+3. FLOW
+- Ogni percorso su una riga separata.
+- Ogni riga deve iniziare con FLOW:
+FLOW:START->T1->GW1
+FLOW:GW1->SI->T2->T4
+FLOW:GW1->NO->T3->T4
+FLOW:T4->END1
+
+REGOLE TASSATIVE
+- Usa solo i tipi di nodo supportati: START, T, GW, GWP, GWPJ, MSG, END.
+- Ogni task deve essere nella forma "Verbo + Oggetto".
+- Ogni GW deve essere una domanda chiusa.
+- Ogni GW deve avere almeno 2 uscite.
+- Ogni GWP è un fork AND e deve avere almeno 2 uscite senza label.
+- Ogni GWPJ è un join AND, deve avere almeno 2 entrate e una sola uscita.
+- GWPJ ha sempre una sola uscita nel FLOW.
+- I MSG sono nodi normali nel FLOW; la direzione va nel nome del nodo, non nel FLOW.
+- Nei GW i rami possono convergere direttamente su un nodo comune, senza join esplicito.
+- È consentito che più righe FLOW convergano sullo stesso nodo.
+- È consentito che un nodo compaia in più righe FLOW.
+- Non inventare attività di business non presenti nella descrizione originale.
+- È consentita solo la normalizzazione linguistica di attività esplicitamente presenti.
+- Tutti i nodi dichiarati devono comparire almeno una volta nei FLOW.
+- Nessun nodo può restare isolato o non referenziato.
+- Ogni riferimento nei rami dei gateway e nei FLOW deve puntare a un nodo dichiarato.
+- START è unico e senza numero.
+- Deve esistere almeno un END.
+- Gli ID sono progressivi per tipo: T1,T2... GW1,GW2... GWP1,GWP2... GWPJ1,GWPJ2... MSG1,MSG2... END1,END2...
+- Tutti gli ID devono essere univoci.
+- I nomi delle lane usano il formato Lane_NomeAttore, senza spazi.
+- I nomi delle lane possono contenere solo lettere, numeri e underscore.
+- I nomi dei nodi e delle lane non devono contenere i caratteri riservati: :, ->, [, ], |
+- Non aggiungere testo prima o dopo il blocco strutturato.
+- Restituisci solo output nel formato richiesto.
+
+ELEMENTI SUPPORTATI
+- START  = evento di inizio unico
+- END    = evento di fine
+- T      = task
+- GW     = gateway esclusivo XOR
+- GWP    = gateway parallelo AND fork
+- GWPJ   = gateway parallelo AND join
+- MSG    = evento messaggio intermedio di invio o ricezione
+
+CRITERI DI FEDELTÀ
+- Mantieni tutti i passaggi espliciti della descrizione.
+- Non aggiungere controlli, verifiche o approvazioni non menzionati.
+- Se una decisione è implicita ma non formulata chiaramente, rappresentala come task e non come gateway.
+- Usa nomi sintetici, univoci e coerenti.
+
+ESEMPIO
+POOL:AcquistoPane
+LANES:[Lane_Gigi|Lane_Panettiere]
+START:Inizio processo [Lane_Gigi]
+T1:Verificare condizioni meteo [Lane_Gigi]
+GW1:Piove? [Lane_Gigi]
+  SI->T2
+  NO->T3
+T2:Prendere ombrello [Lane_Gigi]
+T3:Recarsi dal panettiere [Lane_Gigi]
+T4:Richiedere pane [Lane_Gigi]
+T5:Verificare disponibilità pane [Lane_Panettiere]
+GW2:È giovedì? [Lane_Panettiere]
+  SI->T6
+  NO->T7
+T6:Preparare pane speciale [Lane_Panettiere]
+T7:Fornire pane standard [Lane_Panettiere]
+T8:Ritirare pane [Lane_Gigi]
+T9:Effettuare pagamento [Lane_Gigi]
+T10:Riscuotere pagamento [Lane_Panettiere]
+T11:Tornare a casa [Lane_Gigi]
+END1:Pane acquistato [Lane_Gigi]
+FLOW:START->T1->GW1
+FLOW:GW1->SI->T2->T3
+FLOW:GW1->NO->T3
+FLOW:T3->T4->T5->GW2
+FLOW:GW2->SI->T6->T8
+FLOW:GW2->NO->T7->T8
+FLOW:T8->T9->T10->T11->END1`;
+
+function openParserModal() {
+  document.getElementById('parser-modal-textarea').value = PARSER_PROMPT;
+  document.getElementById('parser-modal-overlay').classList.add('show');
+}
+
+function closeParserModal() {
+  document.getElementById('parser-modal-overlay').classList.remove('show');
+}
+
+function copyParserPrompt() {
+  navigator.clipboard.writeText(PARSER_PROMPT).then(() => {
+    const btn = document.getElementById('parser-copy-btn');
+    const orig = btn.textContent;
+    btn.textContent = '✓ COPIATO';
+    setTimeout(() => btn.textContent = orig, 1500);
+  });
+}
 
 async function clearAll() {
   if (!confirm('Pulire tutto? Verranno cancellati: testo, diagramma e storico.')) return;
